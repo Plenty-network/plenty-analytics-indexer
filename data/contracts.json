@@ -1,0 +1,13 @@
+{
+  "amm": {
+    "KT1CAYNQGvYSF5UvHK21grMrKpe2563w9UcX": {
+      "token1": "tez",
+      "token2": "ctez"
+    }
+  },
+  "tokens": {
+    "KT1GRSvLoikDsXujKgZPsGLX8k8VvR2Tq95b_0": "PLENTY",
+    "KT19at7rQUvyjxnZ2fBv7D9zc8rkyG7gAoU8_0": "ETHtz",
+    "KT1XRPEPXbZK25r3Htzp2o1x7xdMMmfocKNW_0": "uUSD"
+  }
+}

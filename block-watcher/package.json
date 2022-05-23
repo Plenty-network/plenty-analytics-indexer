@@ -1,0 +1,22 @@
+{
+  "name": "tbp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "ts-node ./src/",
+    "start": "node ./build/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@taquito/rpc": "^12.1.1",
+    "axios": "^0.27.2"
+  },
+  "devDependencies": {
+    "typescript": "^4.6.4",
+    "ts-node": "^10.7.0"
+  }
+}
