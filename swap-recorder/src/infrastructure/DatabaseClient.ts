@@ -1,6 +1,6 @@
 import { Client, QueryResult } from "pg";
 
-import { Config, DatabaseGetParams, DatabaseInsertParams } from "../types";
+import { Config, DatabaseGetParams, DatabaseInsertParams, DatabaseUpdateParams } from "../types";
 
 export default class DatabaseClient {
   private _dbClient: Client;
@@ -30,6 +30,16 @@ export default class DatabaseClient {
           PRIMARY KEY (id, op_hash)
         );`
       );
+      await this._dbClient.query(
+        `CREATE TABLE IF NOT EXISTS amm_aggregate (
+          ts BIGINT,
+          amm VARCHAR(50),
+          volume_usd NUMERIC NOT NULL,
+          fee_usd NUMERIC NOT NULL,
+          tvl_usd NUMERIC NOT NULL,
+          PRIMARY KEY (ts, amm)
+        );`
+      );
     } catch (err) {
       throw err;
     }
@@ -49,6 +59,15 @@ export default class DatabaseClient {
   async insert(params: DatabaseInsertParams): Promise<QueryResult<any>> {
     try {
       const res = await this._dbClient.query(`INSERT INTO ${params.table} ${params.columns} VALUES ${params.values};`);
+      return res;
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  async update(params: DatabaseUpdateParams): Promise<QueryResult<any>> {
+    try {
+      const res = await this._dbClient.query(`UPDATE ${params.table} SET ${params.set} WHERE ${params.where};`);
       return res;
     } catch (err) {
       throw err;

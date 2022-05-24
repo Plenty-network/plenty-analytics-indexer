@@ -6,11 +6,11 @@ export const config: Config = {
   port: process.env.PORTS || "6024",
   tzktLimit: 1000,
   tzktOffset: 1000,
-  sharedDirectory: process.env.SHARED_DIRECTORY || "/app/data",
+  sharedDirectory: process.env.SHARED_DIRECTORY || "./data",
   postgres: {
     username: process.env.POSTGRES_USER || "master",
     database: process.env.POSTGRES_DB || "plenty",
     password: process.env.POSTGRES_PASSWORD || "123456",
-    host: process.env.POSTGRES_HOST || "db",
+    host: process.env.POSTGRES_HOST || "localhost",
   },
 };

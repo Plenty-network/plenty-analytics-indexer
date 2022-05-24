@@ -24,7 +24,7 @@ export interface Contracts {
     };
   };
   tokens: {
-    [key: string]: string;
+    [key: string]: number;
   };
 }
 
@@ -50,6 +50,12 @@ export interface DatabaseInsertParams {
   table: string;
   columns: string;
   values: string;
+}
+
+export interface DatabaseUpdateParams {
+  table: string;
+  set: string;
+  where: string;
 }
 
 export interface GetTransactionParameters {
