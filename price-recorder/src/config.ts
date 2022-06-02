@@ -8,8 +8,8 @@ export const config: Config = {
   tzktOffset: 1000,
   sharedDirectory: process.env.SHARED_DIRECTORY || "./data",
   postgres: {
-    username: process.env.POSTGRES_USER || "postgres",
-    database: process.env.POSTGRES_DB || "postgres",
+    username: process.env.POSTGRES_USER || "master",
+    database: process.env.POSTGRES_DB || "plenty",
     password: process.env.POSTGRES_PASSWORD || "123456",
     host: process.env.POSTGRES_HOST || "localhost",
   },
