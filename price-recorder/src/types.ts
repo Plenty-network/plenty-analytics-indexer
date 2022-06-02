@@ -61,6 +61,15 @@ export interface DatabaseUpdateParams {
   where: string;
 }
 
+export interface AMMStorage {
+  token1Id: string;
+  token2Id: string;
+  token1_pool: string;
+  token2_pool: string;
+  token1Address: string;
+  token2Address: string;
+}
+
 export interface GetTransactionParameters {
   contract: string;
   entrypoint: string[];

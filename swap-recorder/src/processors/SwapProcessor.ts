@@ -210,7 +210,7 @@ export default class SwapProcessor {
   private _calculateValueUSD(token: string, amount: string, unitPrice: number): number {
     return new BigNumber(amount)
       .multipliedBy(unitPrice)
-      .dividedBy(10 ** this._contracts.tokens[token])
+      .dividedBy(10 ** this._contracts.tokens[token].decimals)
       .toNumber();
   }
 
