@@ -86,12 +86,12 @@
     },
     "KT1C9gJRfkpPbNdBn3XyYbrUHT6XgfPzZqXP": {
       "token1": "KT1GRSvLoikDsXujKgZPsGLX8k8VvR2Tq95b_0",
-      "token2": "ctez"
+      "token2": "KT1SjXiUX63QvdNMcM2m492f7kuf8JxXRLp4_0"
     }
   },
   "tokens": {
     "tez": { "decimals": 6, "priceDepth": -1 },
-    "ctez": { "decimals": 6, "priceDepth": 3 },
+    "KT1SjXiUX63QvdNMcM2m492f7kuf8JxXRLp4_0": { "decimals": 6, "priceDepth": 3 },
     "KT1GRSvLoikDsXujKgZPsGLX8k8VvR2Tq95b_0": { "decimals": 18, "priceDepth": 2 },
     "KT18fp5rcTW7mbWDmzFwjLDUhs5MeJmagDSZ_17": { "decimals": 6, "priceDepth": 1 },
     "KT18fp5rcTW7mbWDmzFwjLDUhs5MeJmagDSZ_1": { "decimals": 18, "priceDepth": 3 },
