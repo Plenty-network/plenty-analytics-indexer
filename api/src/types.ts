@@ -21,25 +21,17 @@ export interface Config {
 }
 
 export interface Contracts {
-  voteEscrow: {
-    address: string;
+  amm: {
+    [key: string]: {
+      token1: string;
+      token2: string;
+    };
   };
-  ply: {
-    address: string;
-  };
-  veSwap: {
-    address: string;
-  };
-  voter: {
-    address: string;
-  };
-  feeDistributor: {
-    address: string;
-  };
-  bigMaps: {
-    locks: number;
-    ledger: number;
-    attached: number;
+  tokens: {
+    [key: string]: {
+      decimals: number;
+      priceDepth: number;
+    };
   };
 }
 
@@ -109,4 +101,14 @@ export interface Transaction {
       }
     | undefined;
   storage: any;
+}
+export interface LiquidityResponse {
+  opHash: string;
+  totalValue: string;
+  tokenOneAmount: string;
+  tokenTwoAmount: string;
+  userAccount: string;
+  timeStamp: Date;
+  tokenOneAddress: string;
+  tokenTwoAddress: string;
 }
