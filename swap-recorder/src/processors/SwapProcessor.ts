@@ -62,18 +62,26 @@ export default class SwapProcessor {
         // Get output token (second transfer after last swap)
         const [_, outputAmount] = this._getOutput(operation, swapIndex);
 
+        // -ve sign for an amount indicates the input token.
         const token1 = this._contracts.amm[txn.target.address].token1 === inputToken ? -inputAmount : outputAmount;
         const token2 = this._contracts.amm[txn.target.address].token2 === inputToken ? -inputAmount : outputAmount;
+
+        // TODO: Fetch real price from price servive
+        const price = 1.96;
+
+        let volume = this._calculateValueUSD(inputToken, inputAmount, price);
+        let fee = this._calculateFeeUSD(inputToken, inputAmount, price);
+        let tvl = 0;
 
         // Insert swap into postgres db
         this._dbClient.insert({
           table: "swap",
-          columns: "(id, op_hash, ts, account, amm, token_1, token_2)",
+          columns: "(id, op_hash, ts, account, amm, token_1, token_2, value, fee)",
           values: `(${txn.id}, '${txn.hash}', ${Math.floor(new Date(txn.timestamp).getTime() / 1000)}, '${
             operation[swapIndex].initiator
               ? operation[swapIndex].initiator.address
               : operation[swapIndex].sender.address
-          }', '${txn.target.address}', ${token1}, ${token2})`,
+          }', '${txn.target.address}', ${token1}, ${token2}, ${volume}, ${fee})`,
         });
 
         // Timestamp at start of day (UTC)
@@ -84,13 +92,6 @@ export default class SwapProcessor {
           table: "amm_aggregate",
           where: `ts=${roundedTS} AND amm='${txn.target.address}'`,
         });
-
-        // TODO: Fetch real price from price servive
-        const price = 1.96;
-
-        let volume = this._calculateValueUSD(inputToken, inputAmount, price);
-        let fee = this._calculateFeeUSD(inputToken, inputAmount, price);
-        let tvl = 0;
 
         if (existingEntry.rowCount === 0) {
           this._dbClient.insert({

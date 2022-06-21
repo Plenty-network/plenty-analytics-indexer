@@ -27,6 +27,8 @@ export default class DatabaseClient {
           amm VARCHAR(50) NOT NULL,
           token_1 NUMERIC NOT NULL,
           token_2 NUMERIC NOT NULL,
+          value NUMERIC NOT NULL,
+          fee NUMERIC NOT NULL,
           PRIMARY KEY (id, op_hash)
         );`
       );
