@@ -28,14 +28,14 @@ function build({ dbClient, contracts }: Dependecies): Router {
 
   router.get("/:amm_address?", async (req: Request, res: Response) => {
     try {
-      const removeLiqData = await dbClient.get({
+      const swapsData = await dbClient.get({
         select: "op_hash, value, token_1, token_2, account, ts, amm",
-        table: "remove_liquidity",
+        table: "swap",
         where: `op_hash IS NOT NULL${req.params.amm_address ? ' AND amm = \'' + req.params.amm_address + '\'' : ''} ORDER BY ts DESC`,
       });
       
-      if (removeLiqData.rowCount > 0) {
-        const responseData = removeLiqData.rows.map(createResponseData);
+      if (swapsData.rowCount > 0) {
+        const responseData = swapsData.rows.map(createResponseData);
         res.status(200).json({ data: responseData, message: "SUCCESS" });
       } else {
         res.status(200).json({ data: [], message: "SUCCESS" });

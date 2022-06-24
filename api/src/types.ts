@@ -53,6 +53,11 @@ export interface DatabaseGetParams {
   where: string;
 }
 
+export interface DatabaseGetFunctionParams {
+  function: string;
+  select: string;
+}
+
 export interface DatabaseInsertParams {
   table: string;
   columns: string;
@@ -102,13 +107,22 @@ export interface Transaction {
     | undefined;
   storage: any;
 }
-export interface LiquidityResponse {
+export interface TransactionsResponse {
   opHash: string;
   totalValue: string;
   tokenOneAmount: string;
   tokenTwoAmount: string;
   userAccount: string;
   timeStamp: Date;
+  tokenOneAddress: string;
+  tokenTwoAddress: string;
+}
+
+export interface PoolsResponse {
+  amm: string;
+  tvl: string;
+  volume24Hours: string;
+  volume7Days: string;
   tokenOneAddress: string;
   tokenTwoAddress: string;
 }

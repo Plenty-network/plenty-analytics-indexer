@@ -1,11 +1,11 @@
 import BigNumber from "bignumber.js";
 import { Request, Response, Router } from "express";
-import { Dependecies, LiquidityResponse } from "../../types";
+import { Dependecies, TransactionsResponse } from "../../types";
 
 function build({ dbClient, contracts }: Dependecies): Router {
   const router = Router();
 
-  function createResponseData(row: any): LiquidityResponse {
+  function createResponseData(row: any): TransactionsResponse {
     const tokenOneAddress = contracts.amm[row.amm].token1;
     const tokenTwoAddress = contracts.amm[row.amm].token2;
     const tokenOneAmount = new BigNumber(row.token_1)
@@ -26,12 +26,12 @@ function build({ dbClient, contracts }: Dependecies): Router {
     };
   }
 
-  router.get("/", async (_req: Request, res: Response) => {
+  router.get("/:amm_address?", async (req: Request, res: Response) => {
     try {
       const addLiqData = await dbClient.get({
         select: "op_hash, value, token_1, token_2, account, ts, amm",
         table: "add_liquidity",
-        where: "op_hash IS NOT NULL ORDER BY ts DESC",
+        where: `op_hash IS NOT NULL${req.params.amm_address ? ' AND amm = \'' + req.params.amm_address + '\'' : ''} ORDER BY ts DESC`,
       });
       
       if (addLiqData.rowCount > 0) {
