@@ -126,6 +126,43 @@ function build({ dbClient, contracts }: Dependecies): Router {
     }
   });
 
+
+  router.get("/tvl-24h-change", async (req: Request, res: Response) => {
+    try {
+      const ammAddress = req.query.amm_address as string;
+      if (!ammAddress || ammAddress === "") {
+        res.status(500).json({ data: [], message: "MISSING_QUERY_ARGUMENT" });
+      } else {
+        const tvlResponse = await dbClient.getFunction({
+          select: "*",
+          function: `FetchTvl24hDataChange('${ammAddress}')`
+        });
+        if (tvlResponse.rowCount > 0) {
+          const twentyFourHoursTvl = new BigNumber(tvlResponse.rows[0].tvl);
+          const fourtyEightHoursTvl = new BigNumber(tvlResponse.rows[1].tvl);
+          const changePercentage = percentageChange(fourtyEightHoursTvl, twentyFourHoursTvl);
+          res
+            .status(200)
+            .json({
+              data: {
+                amm: ammAddress,
+                tvl24Hours: twentyFourHoursTvl.toString(),
+                percentageChange: changePercentage,
+              },
+              message: "SUCCESS",
+            });
+        } else {
+          res
+            .status(200)
+            .json({ data: { amm: ammAddress, tvl24Hours: "0", percentageChange: "0" }, message: "NO_DATA_FOUND" });
+        }
+      }
+    } catch (error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
   return router;
 }
 

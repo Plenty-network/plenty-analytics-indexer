@@ -94,6 +94,8 @@ export default class LiquidityProcessor {
     }
   }
 
+
+  // TODO: Add for tez transactions. Change casing for production.
   /**
    * @description Get the tokens and the amount for the tokens used in both add and remove liquidity transactions.
    */
