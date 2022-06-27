@@ -19,46 +19,6 @@ export default class DatabaseClient {
     try {
       this._dbClient.connect();
       await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS add_liquidity (
-          id NUMERIC,
-          op_hash VARCHAR(100),
-          ts BIGINT NOT NULL,
-          account VARCHAR(50) NOT NULL,
-          amm VARCHAR(50) NOT NULL,
-          token_1 NUMERIC NOT NULL,
-          token_2 NUMERIC NOT NULL,
-          value NUMERIC NOT NULL,
-          PRIMARY KEY (id, op_hash)
-        );`
-      );
-      await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS remove_liquidity (
-          id NUMERIC,
-          op_hash VARCHAR(100),
-          ts BIGINT NOT NULL,
-          account VARCHAR(50) NOT NULL,
-          amm VARCHAR(50) NOT NULL,
-          token_1 NUMERIC NOT NULL,
-          token_2 NUMERIC NOT NULL,
-          value NUMERIC NOT NULL,
-          PRIMARY KEY (id, op_hash)
-        );`
-      );
-      await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS swap (
-          id NUMERIC,
-          op_hash VARCHAR(100),
-          ts BIGINT NOT NULL,
-          account VARCHAR(50) NOT NULL,
-          amm VARCHAR(50) NOT NULL,
-          token_1 NUMERIC NOT NULL,
-          token_2 NUMERIC NOT NULL,
-          value NUMERIC NOT NULL,
-          fee NUMERIC NOT NULL,
-          PRIMARY KEY (id, op_hash)
-        );`
-      );
-      await this._dbClient.query(
         `CREATE OR REPLACE FUNCTION FetchAllPoolData (StartTimeStamp bigint DEFAULT 0, EndTimeStamp bigint DEFAULT 0)
           RETURNS TABLE (
             amm varchar(50),
