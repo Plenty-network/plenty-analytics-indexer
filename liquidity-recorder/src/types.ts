@@ -4,6 +4,7 @@ import TzktProvider from "./infrastructure/TzktProvider";
 export interface Config {
   heartbeatURL: string;
   tzktURL: string;
+  configURL: string;
   port: string;
   tzktLimit: number;
   tzktOffset: number;
@@ -16,26 +17,11 @@ export interface Config {
   };
 }
 
-export interface Contracts {
-  amm: {
-    [key: string]: {
-      token1: string;
-      token2: string;
-    };
-  };
-  tokens: {
-    [key: string]: {
-      decimals: number;
-      priceDepth: number;
-    };
-  };
-}
-
 export interface Dependecies {
   config: Config;
   dbClient: DatabaseClient;
   tzktProvider: TzktProvider;
-  contracts: Contracts;
+  data: Data;
 }
 
 export interface BlockData {
@@ -97,4 +83,52 @@ export interface Transaction {
       }
     | undefined;
   storage: any;
+}
+
+// Data(contracts) related types and interfaces.
+
+export enum TokenType {
+  TEZ = "TEZ",
+  FA12 = "FA1.2",
+  FA2 = "FA2",
+}
+
+export interface Token {
+  address: string | undefined;
+  symbol: string;
+  type: TokenType;
+  tokenId: number | undefined;
+  decimals: number;
+  mapId: number | undefined;
+}
+
+export interface Tokens {
+  [key: string]: Token;
+}
+
+export enum AmmType {
+  FLAT = "FLAT",
+  NORMAL = "NORMAL",
+  META = "META",
+}
+
+export interface AmmContract {
+  address: string;
+  token1: Token | string;
+  token2: Token | string;
+  type: AmmType;
+  gaugeAddress: string | undefined;
+  bribeAddress: string | undefined;
+  token1Precision: string | undefined;
+  token2Precision: string | undefined;
+  lpToken: Token | string;
+}
+
+export interface AmmContracts {
+  [key: string]: AmmContract;
+}
+
+export interface Data {
+  tokens: Tokens;
+  amm: AmmContracts;
 }

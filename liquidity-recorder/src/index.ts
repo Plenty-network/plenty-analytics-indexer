@@ -4,13 +4,14 @@ import { buildDependencies } from "./dependencies";
 import HeartBeat from "./infrastructure/Heartbeat";
 import LiquidityProcessor from "./processors/LiquidityProcessor";
 
-const dependencies = buildDependencies(config);
-
-const heartbeat = new HeartBeat(config);
-const liquidityProcessor = new LiquidityProcessor(dependencies);
 
 (async () => {
   try {
+    const dependencies = await buildDependencies(config);
+
+    const heartbeat = new HeartBeat(config);
+    const liquidityProcessor = new LiquidityProcessor(dependencies);
+
     heartbeat.start();
     await dependencies.dbClient.init();
     liquidityProcessor.process();
