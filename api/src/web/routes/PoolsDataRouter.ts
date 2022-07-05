@@ -3,19 +3,21 @@ import { Dependecies, PoolsResponse } from "../../types";
 import { percentageChange } from "../../helpers";
 import BigNumber from "bignumber.js";
 
-function build({ dbClient, contracts }: Dependecies): Router {
+function build({ dbClient, data }: Dependecies): Router {
   const router = Router();
 
   function createResponseData(row: any): PoolsResponse {
-    const tokenOneAddress = contracts.amm[row.amm].token1;
-    const tokenTwoAddress = contracts.amm[row.amm].token2;
+    const tokenOneAddress = data.amm[row.amm].token1;
+    const tokenTwoAddress = data.amm[row.amm].token2;
+    const tokenOneSymbol = data.tokens[tokenOneAddress].symbol;
+    const tokenTwoSymbol = data.tokens[tokenTwoAddress].symbol;
     return {
       amm: row.amm,
       tvl: row.tvl,
       volume24Hours: row.volume_24h,
       volume7Days: row.volume_7d,
-      tokenOneAddress,
-      tokenTwoAddress,
+      tokenOneSymbol,
+      tokenTwoSymbol,
     };
   }
 

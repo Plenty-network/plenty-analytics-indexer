@@ -2,18 +2,20 @@ import BigNumber from "bignumber.js";
 import { Request, Response, Router } from "express";
 import { Dependecies, TransactionsResponse } from "../../types";
 
-function build({ dbClient, contracts }: Dependecies): Router {
+function build({ dbClient, data }: Dependecies): Router {
   const router = Router();
 
   function createResponseData(row: any): TransactionsResponse {
-    const tokenOneAddress = contracts.amm[row.amm].token1;
-    const tokenTwoAddress = contracts.amm[row.amm].token2;
+    const tokenOneAddress = data.amm[row.amm].token1;
+    const tokenTwoAddress = data.amm[row.amm].token2;
     const tokenOneAmount = new BigNumber(row.token_1)
-      .dividedBy(new BigNumber(10).pow(contracts.tokens[tokenOneAddress].decimals))
+      .dividedBy(new BigNumber(10).pow(data.tokens[tokenOneAddress].decimals))
       .toString();
     const tokenTwoAmount = new BigNumber(row.token_2)
-      .dividedBy(new BigNumber(10).pow(contracts.tokens[tokenTwoAddress].decimals))
+      .dividedBy(new BigNumber(10).pow(data.tokens[tokenTwoAddress].decimals))
       .toString();
+    const tokenOneSymbol = data.tokens[tokenOneAddress].symbol;
+    const tokenTwoSymbol = data.tokens[tokenTwoAddress].symbol;
     return {
       opHash: row.op_hash,
       totalValue: row.value,
@@ -21,8 +23,9 @@ function build({ dbClient, contracts }: Dependecies): Router {
       tokenTwoAmount,
       userAccount: row.account,
       timeStamp: new Date(row.ts * 1000),
-      tokenOneAddress,
-      tokenTwoAddress,
+      ammAddress: row.amm,
+      tokenOneSymbol,
+      tokenTwoSymbol,
     };
   }
 
