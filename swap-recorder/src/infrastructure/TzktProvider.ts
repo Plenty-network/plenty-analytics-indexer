@@ -15,7 +15,7 @@ export default class TzktProvider {
       const res = await axios.get(`${this._tzktURL}/operations/transactions`, {
         params: {
           target: params.contract,
-          entrypoint: params.entrypoint,
+          ["entrypoint.in"]: params.entrypoint.join(),
           ["level.ge"]: params.firstLevel,
           ["level.le"]: params.lastLevel,
           select: params.select,

@@ -1,14 +1,13 @@
-import { readFileSync } from "fs";
-
 import { Config, Dependecies } from "./types";
 import TzktProvider from "./infrastructure/TzktProvider";
 import DatabaseClient from "./infrastructure/DatabaseClient";
+import DataBuilder from "./infrastructure/DataBuilder";
 
-export const buildDependencies = (config: Config): Dependecies => {
+export const buildDependencies =  async (config: Config): Promise<Dependecies> => {
   return {
     config,
     dbClient: new DatabaseClient(config),
     tzktProvider: new TzktProvider(config),
-    contracts: JSON.parse(readFileSync(`${config.sharedDirectory}/contracts.json`).toString()),
+    data: await new DataBuilder(config).buildData(),
   };
 };

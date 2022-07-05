@@ -1,24 +1,25 @@
 import BigNumber from "bignumber.js";
 import DatabaseClient from "../infrastructure/DatabaseClient";
 import TzktProvider from "../infrastructure/TzktProvider";
-import { Config, Dependecies, Contracts, Transaction } from "../types";
+import { Config, Dependecies, Transaction, Data, AmmType } from "../types";
+import { CONSTANTS } from "../constants";
 
 export default class SwapProcessor {
   private _config: Config;
   private _dbClient: DatabaseClient;
   private _tkztProvider: TzktProvider;
-  private _contracts: Contracts;
+  private _data: Data;
 
-  constructor({ config, dbClient, tzktProvider, contracts }: Dependecies) {
+  constructor({ config, dbClient, tzktProvider, data }: Dependecies) {
     this._config = config;
     this._dbClient = dbClient;
     this._tkztProvider = tzktProvider;
-    this._contracts = contracts;
+    this._data = data;
   }
 
   async process(): Promise<void> {
     try {
-      for (const amm of Object.keys(this._contracts.amm)) {
+      for (const amm of Object.keys(this._data.amm)) {
         const operationHashes = await this._getSwapOperationHashes(amm);
         for (const hash of operationHashes) {
           const operation = await this._tkztProvider.getOperation(hash);
@@ -35,8 +36,8 @@ export default class SwapProcessor {
       // Get all swaps from the operation
       const swapIndices: number[] = [];
       for (const [index, txn] of operation.entries()) {
-        if (txn.parameter && this._contracts.amm[txn.target?.address]) {
-          if (["Swap", "ctez_to_tez", "tez_to_ctez"].includes(txn.parameter?.entrypoint)) {
+        if (txn.parameter && this._data.amm[txn.target?.address]) {
+          if (CONSTANTS.ALL_SWAP_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
             swapIndices.push(index);
           }
         }
@@ -57,20 +58,21 @@ export default class SwapProcessor {
         const txn = operation[swapIndex];
 
         // Get input token
-        const [inputToken, inputAmount] = this._getInput(operation, swapIndex);
+        const [inputTokenAddr, inputTokenId, inputAmount] = this._getInput(operation, swapIndex);
 
         // Get output token (second transfer after last swap)
-        const [_, outputAmount] = this._getOutput(operation, swapIndex);
+        const [_, __, outputAmount] = this._getOutput(operation, swapIndex);
 
         // -ve sign for an amount indicates the input token.
-        const token1 = this._contracts.amm[txn.target.address].token1 === inputToken ? -inputAmount : outputAmount;
-        const token2 = this._contracts.amm[txn.target.address].token2 === inputToken ? -inputAmount : outputAmount;
+        const token1 = this._data.amm[txn.target.address].token1 === this._makeKey(inputTokenAddr, inputTokenId) ? -inputAmount : outputAmount;
+        const token2 = this._data.amm[txn.target.address].token2 === this._makeKey(inputTokenAddr, inputTokenId) ? -inputAmount : outputAmount;
 
         // TODO: Fetch real price from price servive
         const price = 1.96;
 
-        let volume = this._calculateValueUSD(inputToken, inputAmount, price);
-        let fee = this._calculateFeeUSD(inputToken, inputAmount, price);
+        let volume = this._calculateValueUSD(inputTokenAddr, inputTokenId, inputAmount, price);
+        let fee = this._calculateFeeUSD(inputTokenAddr, inputTokenId, inputAmount, price, this._data.amm[txn.target.address].type);
+        // Get actual tvl
         let tvl = 0;
 
         // Insert swap into postgres db
@@ -119,59 +121,59 @@ export default class SwapProcessor {
    * @description Works based on the fact that the first token transferred during a non tez swap is
    * the input token. Whereas, for tez input, the amount is transferred directly to the entrypoint.
    */
-  private _getInput(operation: Transaction[], swapIndex: number): [string, string] {
+  private _getInput(operation: Transaction[], swapIndex: number): [string | undefined, number | undefined, string] {
     const swapTxn = operation[swapIndex];
-    if (swapTxn.parameter.entrypoint === "Swap") {
+    if (swapTxn.parameter.entrypoint === CONSTANTS.NORMAL_SWAP_ENTRYPOINT) {
       const tokenTxn = operation[swapIndex + 1];
       if (Array.isArray(tokenTxn.parameter.value)) {
         // FA2 token
         const amount = tokenTxn.parameter.value[0].txs[0].amount;
         const tokenId = tokenTxn.parameter.value[0].txs[0].token_id;
-        return [`${tokenTxn.target.address}_${tokenId}`, amount];
+        return [tokenTxn.target.address, Number(tokenId), amount];
       } else {
         // FA1.2 token
         const amount = tokenTxn.parameter.value.value;
-        return [`${tokenTxn.target.address}_0`, amount];
+        return [tokenTxn.target.address, undefined, amount];
       }
-    } else if (swapTxn.parameter.entrypoint === "ctez_to_tez") {
+    } else if (swapTxn.parameter.entrypoint === CONSTANTS.CTEZ_SWAP_ENTRYPOINT) {
       // ctez input
       const tokenTxn = operation[swapIndex + 3];
       const amount = tokenTxn.parameter.value.value;
-      return ["ctez", amount];
+      return [tokenTxn.target.address, undefined, amount];
     } else {
       // tez input
       const amount = swapTxn.amount.toString();
-      return ["tez", amount];
+      return [undefined, undefined, amount];
     }
   }
 
   /**
    * @description Works on similar grounds as _getInput
    */
-  private _getOutput(operation: Transaction[], swapIndex: number): [string, string] {
+  private _getOutput(operation: Transaction[], swapIndex: number): [string | undefined, number | undefined, string] {
     const swapTxn = operation[swapIndex];
-    if (swapTxn.parameter.entrypoint === "Swap") {
+    if (swapTxn.parameter.entrypoint === CONSTANTS.NORMAL_SWAP_ENTRYPOINT) {
       const tokenTxn = operation[swapIndex + 2];
       if (Array.isArray(tokenTxn.parameter.value)) {
         // FA2 token
         const amount = tokenTxn.parameter.value[0].txs[0].amount;
         const tokenId = tokenTxn.parameter.value[0].txs[0].token_id;
-        return [`${tokenTxn.target.address}_${tokenId}`, amount];
+        return [tokenTxn.target.address, Number(tokenId), amount];
       } else {
         // FA1.2 token
         const amount = tokenTxn.parameter.value.value;
-        return [`${tokenTxn.target.address}_0`, amount];
+        return [tokenTxn.target.address, undefined, amount];
       }
-    } else if (swapTxn.parameter.entrypoint === "tez_to_ctez") {
+    } else if (swapTxn.parameter.entrypoint === CONSTANTS.TEZ_SWAP_ENTRYPOINT) {
       // ctez output
       const tokenTxn = operation[swapIndex + 3];
       const amount = tokenTxn.parameter.value.value;
-      return ["ctez", amount];
+      return [tokenTxn.target.address, undefined, amount];
     } else {
       // tez output
-      const tokenTxn = operation[swapIndex + 3];
+      const tokenTxn = operation[swapIndex + 4];
       const amount = tokenTxn.amount.toString();
-      return ["tez", amount];
+      return [undefined, undefined, amount];
     }
   }
 
@@ -183,7 +185,7 @@ export default class SwapProcessor {
       while (true) {
         const hashes = await this._tkztProvider.getTransactions<string[]>({
           contract,
-          entrypoint: contract === "KT1CAYNQGvYSF5UvHK21grMrKpe2563w9UcX" ? ["tez_to_ctez", "ctez_to_tez"] : ["Swap"],
+          entrypoint: contract === CONSTANTS.TEZ_CTEZ_AMM_ADDRESS ? CONSTANTS.TEZ_CTEZ_SWAP_ENTRYPOINTS : [`${CONSTANTS.NORMAL_SWAP_ENTRYPOINT}`],
           firstLevel,
           lastLevel,
           limit: this._config.tzktLimit,
@@ -208,18 +210,27 @@ export default class SwapProcessor {
     return [2361000, 2384000]; // [last level from json, current level from json]
   }
 
-  private _calculateValueUSD(token: string, amount: string, unitPrice: number): number {
+  private _calculateValueUSD(
+    tokenAddr: string,
+    tokenId: number | undefined,
+    amount: string,
+    unitPrice: number
+  ): number {
     return new BigNumber(amount)
       .multipliedBy(unitPrice)
-      .dividedBy(10 ** this._contracts.tokens[token].decimals)
+      .dividedBy(10 ** this._data.tokens[this._makeKey(tokenAddr, tokenId)].decimals)
       .toNumber();
   }
 
-  private _calculateFeeUSD(token: string, amount: string, unitPrice: number): number {
-    if (token === "tez" || token === "ctez") {
-      return new BigNumber(this._calculateValueUSD(token, amount, unitPrice)).multipliedBy(0.001).toNumber();
+  private _calculateFeeUSD(tokenAddr: string, tokenId: number | undefined, amount: string, unitPrice: number, ammType: string): number {
+    if (ammType === AmmType.FLAT) {
+      return new BigNumber(this._calculateValueUSD(tokenAddr, tokenId, amount, unitPrice)).multipliedBy(0.001).toNumber();
     } else {
-      return new BigNumber(this._calculateValueUSD(token, amount, unitPrice)).multipliedBy(0.0035).toNumber();
+      return new BigNumber(this._calculateValueUSD(tokenAddr, tokenId, amount, unitPrice)).multipliedBy(0.0035).toNumber();
     }
+  }
+
+  private _makeKey(address: string | undefined, tokenId: number | undefined): string {
+    return JSON.stringify({ address, tokenId });
   }
 }
