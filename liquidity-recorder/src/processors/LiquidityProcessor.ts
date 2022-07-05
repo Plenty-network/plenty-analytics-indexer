@@ -45,7 +45,7 @@ export default class LiquidityProcessor {
 
       for (const liquidityIndex of liquidityIndices) {
         const txn = operation[liquidityIndex];
-        let tokenOneAddr: string,
+        let tokenOneAddr: string | undefined,
           tokenOneId: number | undefined,
           tokenOneAmount: string,
           tokenTwoAddr: string,
@@ -172,9 +172,9 @@ export default class LiquidityProcessor {
   private _getTokensTezCtez(
     operation: Transaction[],
     liquidityIndex: number
-  ): [string, number | undefined, string, string, number | undefined, string] {
+  ): [string | undefined, number | undefined, string, string, number | undefined, string] {
     const liquidityTxn = operation[liquidityIndex];
-    let tokenOneAddr: string,
+    let tokenOneAddr: string | undefined,
       tokenOneId: number | undefined,
       tokenOneAmount: string,
       tokenTwoAddr: string,
