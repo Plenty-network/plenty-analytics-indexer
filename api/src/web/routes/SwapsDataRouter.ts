@@ -6,16 +6,14 @@ function build({ dbClient, data }: Dependecies): Router {
   const router = Router();
 
   function createResponseData(row: any): TransactionsResponse {
-    const tokenOneAddress = data.amm[row.amm].token1;
-    const tokenTwoAddress = data.amm[row.amm].token2;
+    const tokenOneSymbol = data.amm[row.amm].token1.symbol;
+    const tokenTwoSymbol = data.amm[row.amm].token2.symbol;
     const tokenOneAmount = new BigNumber(row.token_1)
-      .dividedBy(new BigNumber(10).pow(data.tokens[tokenOneAddress].decimals))
+      .dividedBy(new BigNumber(10).pow(data.tokens[tokenOneSymbol].decimals))
       .toString();
     const tokenTwoAmount = new BigNumber(row.token_2)
-      .dividedBy(new BigNumber(10).pow(data.tokens[tokenTwoAddress].decimals))
+      .dividedBy(new BigNumber(10).pow(data.tokens[tokenTwoSymbol].decimals))
       .toString();
-    const tokenOneSymbol = data.tokens[tokenOneAddress].symbol;
-    const tokenTwoSymbol = data.tokens[tokenTwoAddress].symbol;
     return {
       opHash: row.op_hash,
       totalValue: row.value,

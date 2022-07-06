@@ -25,14 +25,15 @@ export default class DataBuilder {
 
   private async _getTokensData(): Promise<Tokens> {
     try {
-      const tokensResult = (await axios.get(this._configUrl + "/token")).data;
+      /* const tokensResult = (await axios.get(this._configUrl + "/token")).data;
       const tokens: Tokens = {};
       for (const token of Object.keys(tokensResult)) {
         tokens[this._makeKey(tokensResult[token].address, tokensResult[token].tokenId)] = {
           ...tokensResult[token],
         };
       }
-      return tokens;
+      return tokens; */
+      return (await axios.get(this._configUrl + "/token")).data;
     } catch (err) {
       throw err;
     }
@@ -40,7 +41,7 @@ export default class DataBuilder {
 
   private async _getAmmContracts(): Promise<AmmContracts> {
     try {
-      const ammResult = (await axios.get(this._configUrl + "/amm")).data;
+      /* const ammResult = (await axios.get(this._configUrl + "/amm")).data;
       const amm: AmmContracts = {};
       for (const ammContract of Object.keys(ammResult)) {
         amm[ammContract] = {
@@ -61,7 +62,8 @@ export default class DataBuilder {
           lpToken: this._makeKey(ammResult[ammContract].lpToken.address, undefined),
         };
       }
-      return amm;
+      return amm; */
+      return (await axios.get(this._configUrl + "/amm")).data;
     } catch (err) {
       throw err;
     }

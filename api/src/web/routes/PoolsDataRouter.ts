@@ -7,10 +7,8 @@ function build({ dbClient, data }: Dependecies): Router {
   const router = Router();
 
   function createResponseData(row: any): PoolsResponse {
-    const tokenOneAddress = data.amm[row.amm].token1;
-    const tokenTwoAddress = data.amm[row.amm].token2;
-    const tokenOneSymbol = data.tokens[tokenOneAddress].symbol;
-    const tokenTwoSymbol = data.tokens[tokenTwoAddress].symbol;
+    const tokenOneSymbol = data.amm[row.amm].token1.symbol;
+    const tokenTwoSymbol = data.amm[row.amm].token2.symbol;
     return {
       amm: row.amm,
       tvl: row.tvl,
@@ -27,7 +25,7 @@ function build({ dbClient, data }: Dependecies): Router {
       const twentyFourHoursAgo = new Date(currentTime - (24 * 60 * 60 * 1000)).getTime();
       const poolsData = await dbClient.getFunction({
         select: "*",
-        // function: `FetchAllPoolData(${Math.floor(twentyFourHoursAgo / 1000)},${Math.floor(currentTime / 1000)})`,    //TODO: Remove this comment
+        // function: `FetchAllPoolData(${Math.floor(twentyFourHoursAgo / 1000)},${Math.floor(currentTime / 1000)})`,    //TODO: Uncomment
         function: "FetchAllPoolData(1653015044,1653127514)",   //TODO: Remove this line
       });
       if (poolsData.rowCount > 0) {
@@ -52,13 +50,13 @@ function build({ dbClient, data }: Dependecies): Router {
         const twentyFourHoursAgo = new Date(currentTime - 24 * 60 * 60 * 1000).getTime();
         const fourtyEightHoursAgo = new Date(currentTime - 48 * 60 * 60 * 1000).getTime();
         const twentyFourHoursData = await dbClient.get({
-          // select: `sum(CASE WHEN ts >= ${Math.floor(twentyFourHoursAgo / 1000)} and ts <= ${Math.floor(currentTime / 1000)} then value else 0 end) as volume_24H`, //TODO: Remove this comment
+          // select: `sum(CASE WHEN ts >= ${Math.floor(twentyFourHoursAgo / 1000)} and ts <= ${Math.floor(currentTime / 1000)} then value else 0 end) as volume_24H`, //TODO: Uncomment
           select: "sum(CASE WHEN ts >= 1653015044 and ts <= 1653127514 then value else 0 end) as volume_24H", //TODO: Remove this line
           table: "swap",
           where: `amm = '${ammAddress}' group by amm`,
         });
         const fourtyEightHoursData = await dbClient.get({
-          // select: `sum(CASE WHEN ts >= ${Math.floor(fourtyEightHoursAgo / 1000)} and ts <= ${Math.floor(currentTime / 1000)} then value else 0 end) as volume_24H`, //TODO: Remove this comment
+          // select: `sum(CASE WHEN ts >= ${Math.floor(fourtyEightHoursAgo / 1000)} and ts <= ${Math.floor(currentTime / 1000)} then value else 0 end) as volume_24H`, //TODO: Uncomment
           select: "sum(CASE WHEN ts >= 1652928644 and ts <= 1653127514 then value else 0 end) as volume_48H", //TODO: Remove this line
           table: "swap",
           where: `amm = '${ammAddress}' group by amm`,
@@ -100,7 +98,7 @@ function build({ dbClient, data }: Dependecies): Router {
         const currentTime = new Date().getTime();
         const twentyFourHoursAgo = new Date(currentTime - 24 * 60 * 60 * 1000).getTime();
         const twentyFourHoursData = await dbClient.get({
-          // select: `sum(CASE WHEN ts >= ${Math.floor(twentyFourHoursAgo / 1000)} and ts <= ${Math.floor(currentTime / 1000)} then fee else 0 end) as fee_24H`, //TODO: Remove this comment
+          // select: `sum(CASE WHEN ts >= ${Math.floor(twentyFourHoursAgo / 1000)} and ts <= ${Math.floor(currentTime / 1000)} then fee else 0 end) as fee_24H`, //TODO: Uncomment
           select: "sum(CASE WHEN ts >= 1653015044 and ts <= 1653127514 then fee else 0 end) as fee_24H", //TODO: Remove this line
           table: "swap",
           where: `amm = '${ammAddress}' group by amm`,
@@ -157,6 +155,53 @@ function build({ dbClient, data }: Dependecies): Router {
           res
             .status(200)
             .json({ data: { amm: ammAddress, tvl24Hours: "0", percentageChange: "0" }, message: "NO_DATA_FOUND" });
+        }
+      }
+    } catch (error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
+
+  router.get("/graphs-data", async (req: Request, res: Response) => {
+    try {
+      const ammAddress = req.query.amm_address as string;
+      if (!ammAddress || ammAddress === "") {
+        res.status(500).json({ data: [], message: "MISSING_QUERY_ARGUMENT" });
+      } else {
+        const now = Math.floor(new Date().getTime() / 1000);
+        const oneYearBack = Math.floor(
+          new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+        );
+        const graphsData = await dbClient.get({
+          select: "amm, ts, volume_usd as volume, tvl_usd as tvl, fee_usd as fee",
+          table: "amm_aggregate",
+          where: `amm = '${ammAddress}' and ts >= ${oneYearBack} and ts <= ${now} ORDER BY ts ASC`,
+        });
+        if (graphsData.rowCount > 0) {
+          const finalGraphsData = graphsData.rows.map((row) => {
+            const dateFromDb = new Date(row.ts * 1000);
+            const date = `${dateFromDb.toLocaleString("en-GB", { month: "long" })} ${dateFromDb.toLocaleString(
+              "en-GB",
+              { day: "numeric" }
+            )}, ${dateFromDb.toLocaleString("en-GB", { year: "numeric" })}`;
+            return {
+              amm: row.amm,
+              date,
+              volume: row.volume,
+              tvl: row.tvl,
+              fees: row.fee,
+            };
+          });
+          res.status(200).json({
+            data: finalGraphsData,
+            message: "SUCCESS",
+          });
+        } else {
+          res
+            .status(200)
+            .json({ data: { amm: ammAddress, date: "NA", volume: 0, tvl: 0, fees: 0 }, message: "NO_DATA_FOUND" });
         }
       }
     } catch (error) {

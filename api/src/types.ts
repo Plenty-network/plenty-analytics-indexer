@@ -144,8 +144,8 @@ export enum AmmType {
 
 export interface AmmContract {
   address: string;
-  token1: string;
-  token2: string;
+  token1: Token;
+  token2: Token;
   type: AmmType;
   gaugeAddress: string | undefined;
   bribeAddress: string | undefined;
