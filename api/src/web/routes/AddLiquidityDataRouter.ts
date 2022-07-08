@@ -29,10 +29,16 @@ function build({ dbClient, data }: Dependecies): Router {
 
   router.get("/:amm_address?", async (req: Request, res: Response) => {
     try {
+      const now = Math.floor(new Date().getTime() / 1000);
+      const oneYearBack = Math.floor(
+        new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+      );
       const addLiqData = await dbClient.get({
         select: "op_hash, value, token_1, token_2, account, ts, amm",
         table: "add_liquidity",
-        where: `op_hash IS NOT NULL${req.params.amm_address ? ' AND amm = \'' + req.params.amm_address + '\'' : ''} ORDER BY ts DESC`,
+        where: `op_hash IS NOT NULL${
+          req.params.amm_address ? " AND amm = '" + req.params.amm_address + "'" : ""
+        } AND ts >= ${oneYearBack} AND ts <= ${now} ORDER BY ts DESC`,
       });
       
       if (addLiqData.rowCount > 0) {

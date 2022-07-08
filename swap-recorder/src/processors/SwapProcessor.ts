@@ -72,7 +72,7 @@ export default class SwapProcessor {
 
         let volume = this._calculateValueUSD(inputTokenAddr, inputTokenId, inputAmount, price);
         let fee = this._calculateFeeUSD(inputTokenAddr, inputTokenId, inputAmount, price, this._data.amm[txn.target.address].type);
-        // Get actual tvl
+        // TODO: Get actual tvl
         let tvl = 0;
 
         // Insert swap into postgres db

@@ -58,10 +58,14 @@ function build({ dbClient, data }: Dependecies): Router {
         res.status(500).json({ data: [], message: "MISSING_QUERY_ARGUMENT" });
       } else {
         const allAMMforToken = getAmmContractsForToken(tokenSymbol, data);
+        const now = Math.floor(new Date().getTime() / 1000);
+        const oneYearBack = Math.floor(
+          new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+        );
         const addLiqData = await dbClient.get({
           select: "op_hash, value, token_1, token_2, account, ts, amm",
           table: "add_liquidity",
-          where: `amm in (${allAMMforToken}) AND op_hash IS NOT NULL ORDER BY ts DESC`,
+          where: `amm in (${allAMMforToken}) AND ts >= ${oneYearBack} AND ts <= ${now} AND op_hash IS NOT NULL ORDER BY ts DESC`,
         });
         
         if (addLiqData.rowCount > 0) {
@@ -84,10 +88,14 @@ function build({ dbClient, data }: Dependecies): Router {
         res.status(500).json({ data: [], message: "MISSING_QUERY_ARGUMENT" });
       } else {
         const allAMMforToken = getAmmContractsForToken(tokenSymbol, data);
+        const now = Math.floor(new Date().getTime() / 1000);
+        const oneYearBack = Math.floor(
+          new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+        );
         const removeLiqData = await dbClient.get({
           select: "op_hash, value, token_1, token_2, account, ts, amm",
           table: "remove_liquidity",
-          where: `amm in (${allAMMforToken}) AND op_hash IS NOT NULL ORDER BY ts DESC`,
+          where: `amm in (${allAMMforToken}) AND ts >= ${oneYearBack} AND ts <= ${now} AND op_hash IS NOT NULL ORDER BY ts DESC`,
         });
         
         if (removeLiqData.rowCount > 0) {
@@ -110,10 +118,14 @@ function build({ dbClient, data }: Dependecies): Router {
         res.status(500).json({ data: [], message: "MISSING_QUERY_ARGUMENT" });
       } else {
         const allAMMforToken = getAmmContractsForToken(tokenSymbol, data);
+        const now = Math.floor(new Date().getTime() / 1000);
+        const oneYearBack = Math.floor(
+          new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+        );
         const swapsData = await dbClient.get({
           select: "op_hash, value, token_1, token_2, account, ts, amm",
           table: "swap",
-          where: `amm in (${allAMMforToken}) AND op_hash IS NOT NULL ORDER BY ts DESC`,
+          where: `amm in (${allAMMforToken}) AND ts >= ${oneYearBack} AND ts <= ${now} AND op_hash IS NOT NULL ORDER BY ts DESC`,
         });
         
         if (swapsData.rowCount > 0) {
