@@ -5,6 +5,7 @@ import RemoveLiquidityDataRouter from "./RemoveLiquidityDataRouter";
 import SwapsDataRouter from "./SwapsDataRouter";
 import PoolsDataRouter from "./PoolsDataRouter";
 import TokensDataRouter from "./TokensDataRouter";
+import HomePageDataRouter from "./HomePageDataRouter";
 
 import { Dependecies } from "../../types";
 
@@ -16,6 +17,7 @@ function build(dependencies: Dependecies): Router {
   router.use("/swaps", SwapsDataRouter(dependencies));
   router.use("/pools", PoolsDataRouter(dependencies));
   router.use("/tokens",TokensDataRouter(dependencies));
+  router.use("/home", HomePageDataRouter(dependencies));
   return router;
 }
 

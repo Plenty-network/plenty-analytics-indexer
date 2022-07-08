@@ -106,6 +106,71 @@ export default class DatabaseClient {
         END;
         $$;`
       );
+      await this._dbClient.query(
+        `CREATE OR REPLACE FUNCTION FetchAllPoolDataForAmm (StartTimeStamp bigint DEFAULT 0, EndTimeStamp bigint DEFAULT 0, AmmList text[] DEFAULT ARRAY[''])
+          RETURNS TABLE (
+            amm varchar(50),
+            tvl numeric,
+            volume_24H numeric,
+            volume_7D numeric)
+          LANGUAGE plpgsql
+          AS $$
+        BEGIN
+          RETURN query
+          SELECT
+            q1.amm,
+            q2.tvl,
+            q3.volume_24H,
+            q1.volume AS volume_7D
+          FROM (
+            SELECT
+              SUM(t.volume_usd) AS volume,
+              t.amm
+            FROM (
+              SELECT
+                AG1.*,
+                row_number() OVER (PARTITION BY AG1.amm ORDER BY AG1.ts DESC) AS seqnum
+              FROM
+                public.amm_aggregate AS AG1
+              WHERE
+                AG1.amm = ANY (AmmList)) t
+            WHERE
+              seqnum <= 7
+            GROUP BY
+              t.amm) q1
+          JOIN (
+            SELECT
+              u.tvl_usd AS tvl,
+              u.amm
+            FROM (
+              SELECT
+                AG2.*,
+                row_number() OVER (PARTITION BY AG2.amm ORDER BY AG2.ts DESC) AS seqnum
+              FROM
+                public.amm_aggregate AS AG2
+              WHERE
+                AG2.amm = ANY (AmmList)) u
+            WHERE
+              seqnum <= 1) q2 ON q1.amm = q2.amm
+          JOIN (
+            SELECT
+              sum(
+                CASE WHEN s.ts >= StartTimeStamp
+                  AND s.ts <= EndTimeStamp THEN
+                  s.value
+                ELSE
+                  0
+                END) AS volume_24H,
+              s.amm
+            FROM
+              public.swap AS s
+          WHERE
+            s.amm = ANY (AmmList)
+          GROUP BY
+            s.amm) q3 ON q2.amm = q3.amm;
+        END;
+        $$;`
+      );
     } catch (err) {
       throw err;
     }

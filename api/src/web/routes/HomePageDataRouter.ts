@@ -1,0 +1,157 @@
+import BigNumber from "bignumber.js";
+import { Request, Response, Router } from "express";
+import { percentageChange } from "../../helpers";
+import { Dependecies } from "../../types";
+
+function build({ dbClient, data }: Dependecies): Router {
+  const router = Router();
+  router.get("/tvl-graph-data", async (_req: Request, res: Response) => {
+    try {
+      const now = Math.floor(new Date().getTime() / 1000);
+      const oneYearBack = Math.floor(
+        new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+      );
+      const tvlGraphData = await dbClient.get({
+        select: "sum(tvl_usd) as tvl, ts",
+        table: "amm_aggregate",
+        where: `ts >= ${oneYearBack} AND ts <= ${now} GROUP BY ts ORDER BY ts ASC`,
+      });
+      if (tvlGraphData.rowCount > 0) {
+        const responseData = tvlGraphData.rows.map((row) => {
+          const dateFromDb = new Date(row.ts * 1000);
+          const date = `${dateFromDb.toLocaleString("en-GB", { month: "long" })} ${dateFromDb.toLocaleString("en-GB", {
+            day: "numeric",
+          })}, ${dateFromDb.toLocaleString("en-GB", { year: "numeric" })}`;
+          return {
+            date,
+            tvl: row.tvl,
+          };
+        });
+        res.status(200).json({ data: responseData, message: "SUCCESS" });
+      } else {
+        res.status(200).json({ data: [], message: "SUCCESS" });
+      }
+    } catch(error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
+  router.get("/daily-volume-graph-data", async (_req: Request, res: Response) => {
+    try {
+      const now = Math.floor(new Date().getTime() / 1000);
+      const oneYearBack = Math.floor(
+        new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+      );
+      const volumeGraphData = await dbClient.get({
+        select: "sum(volume_usd) as volume, ts",
+        table: "amm_aggregate",
+        where: `ts >= ${oneYearBack} AND ts <= ${now} GROUP BY ts ORDER BY ts ASC`,
+      });
+      if (volumeGraphData.rowCount > 0) {
+        const responseData = volumeGraphData.rows.map((row) => {
+          const dateFromDb = new Date(row.ts * 1000);
+          const date = `${dateFromDb.toLocaleString("en-GB", { month: "long" })} ${dateFromDb.toLocaleString("en-GB", {
+            day: "numeric",
+          })}, ${dateFromDb.toLocaleString("en-GB", { year: "numeric" })}`;
+          return {
+            date,
+            volumeDaily: row.volume,
+          };
+        });
+        res.status(200).json({ data: responseData, message: "SUCCESS" });
+      } else {
+        res.status(200).json({ data: [], message: "SUCCESS" });
+      }
+    } catch(error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
+  router.get("/volume-change-24h", async (_req: Request, res: Response) => {
+    try {
+      const currentTime = new Date().getTime();
+      const twentyFourHoursAgo = new Date(currentTime - 24 * 60 * 60 * 1000).getTime();
+      const fourtyEightHoursAgo = new Date(currentTime - 48 * 60 * 60 * 1000).getTime();
+      const twentyFourHoursData = await dbClient.get({
+        select: "sum(value) as volume_24h",
+        table: "swap",
+        // where: `ts >= ${Math.floor(twentyFourHoursAgo / 1000)} AND ts <= ${Math.floor(currentTime / 1000)}`, // TODO: Uncomment
+        where: `ts >= 1653015044 AND ts <= 1653127514`, // TODO: Remove this line
+      });
+      const fourtyEightHoursData = await dbClient.get({
+        select: "sum(value) as volume_48h",
+        table: "swap",
+        // where: `ts >= ${Math.floor(fourtyEightHoursAgo / 1000)} AND ts <= ${Math.floor(currentTime / 1000)}`, // TODO: Uncomment
+        where: `ts >= 1652928644 AND ts <= 1653127514`, // TODO: Remove this line
+      });
+      if (twentyFourHoursData.rowCount > 0 && fourtyEightHoursData.rowCount > 0) {
+        const twentyFourHoursVolume = new BigNumber(twentyFourHoursData.rows[0].volume_24h);
+        const fourtyEightHoursVolume = new BigNumber(fourtyEightHoursData.rows[0].volume_48h);
+        const volumeBefore24Hours = fourtyEightHoursVolume.minus(twentyFourHoursVolume);
+        console.log(volumeBefore24Hours.toString());
+        const changePercentage = percentageChange(volumeBefore24Hours, twentyFourHoursVolume);
+        res.status(200).json({
+          data: {
+            volume24Hours: twentyFourHoursVolume.toString(),
+            percentageChange: changePercentage,
+          },
+          message: "SUCCESS",
+        });
+      } else {
+        res
+          .status(200)
+          .json({ data: { volume24Hours: "0", percentageChange: "0" }, message: "NO_DATA_FOUND" });
+      }
+    } catch(error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
+  router.get("/fee-change-24h", async (_req: Request, res: Response) => {
+    try {
+      const currentTime = new Date().getTime();
+      const twentyFourHoursAgo = new Date(currentTime - 24 * 60 * 60 * 1000).getTime();
+      const fourtyEightHoursAgo = new Date(currentTime - 48 * 60 * 60 * 1000).getTime();
+      const twentyFourHoursData = await dbClient.get({
+        select: "sum(fee) as fee_24h",
+        table: "swap",
+        // where: `ts >= ${Math.floor(twentyFourHoursAgo / 1000)} AND ts <= ${Math.floor(currentTime / 1000)}`, // TODO: Uncomment
+        where: `ts >= 1653015044 AND ts <= 1653127514`, // TODO: Remove this line
+      });
+      const fourtyEightHoursData = await dbClient.get({
+        select: "sum(fee) as fee_48h",
+        table: "swap",
+        // where: `ts >= ${Math.floor(fourtyEightHoursAgo / 1000)} AND ts <= ${Math.floor(currentTime / 1000)}`, // TODO: Uncomment
+        where: `ts >= 1652928644 AND ts <= 1653127514`, // TODO: Remove this line
+      });
+      if (twentyFourHoursData.rowCount > 0 && fourtyEightHoursData.rowCount > 0) {
+        const twentyFourHoursFee = new BigNumber(twentyFourHoursData.rows[0].fee_24h);
+        const fourtyEightHoursFee = new BigNumber(fourtyEightHoursData.rows[0].fee_48h);
+        const feeBefore24Hours = fourtyEightHoursFee.minus(twentyFourHoursFee);
+        console.log(feeBefore24Hours.toString());
+        const changePercentage = percentageChange(feeBefore24Hours, twentyFourHoursFee);
+        res.status(200).json({
+          data: {
+            fee24Hours: twentyFourHoursFee.toString(),
+            percentageChange: changePercentage,
+          },
+          message: "SUCCESS",
+        });
+      } else {
+        res
+          .status(200)
+          .json({ data: { fee24Hours: "0", percentageChange: "0" }, message: "NO_DATA_FOUND" });
+      }
+    } catch(error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
+  return router;
+}
+
+export default build;
