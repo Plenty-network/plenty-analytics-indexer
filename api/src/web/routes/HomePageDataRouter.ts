@@ -151,6 +151,41 @@ function build({ dbClient, data }: Dependecies): Router {
     }
   });
 
+  router.get("/tvl-change-24h", async (_req: Request, res: Response) => {
+    try {
+      const currentTime = new Date().getTime();
+      const fourtyEightHoursAgo = new Date(currentTime - 48 * 60 * 60 * 1000).getTime();
+      const tvlData = await dbClient.get({
+        select: "sum(tvl_usd) tvl, ts",
+        table: "amm_aggregate",
+        // where: `${Math.floor(fourtyEightHoursAgo / 1000)} AND ts <= ${Math.floor(currentTime / 1000)} GROUP BY ts ORDER BY ts DESC`, // TODO: Uncomment
+        where: `ts >= 1652928644 AND ts <= 1653127514 GROUP BY ts ORDER BY ts DESC`, // TODO: Remove this line
+      });
+      
+      if (tvlData.rowCount > 0) {
+        const twentyFourHoursTvl = new BigNumber(tvlData.rows[0].tvl);
+        const fourtyEightHoursTvl = new BigNumber(tvlData.rows[1].tvl);
+        const changePercentage = percentageChange(fourtyEightHoursTvl, twentyFourHoursTvl);
+        res
+          .status(200)
+          .json({
+            data: {
+              tvl24Hours: twentyFourHoursTvl.toString(),
+              percentageChange: changePercentage,
+            },
+            message: "SUCCESS",
+          });
+      } else {
+        res
+          .status(200)
+          .json({ data: { tvl24Hours: "0", percentageChange: "0" }, message: "NO_DATA_FOUND" });
+      }
+    } catch(error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
   return router;
 }
 
