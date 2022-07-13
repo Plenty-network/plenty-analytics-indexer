@@ -113,6 +113,15 @@ export interface PoolsResponse {
   tokenTwoSymbol: string;
 }
 
+export interface VolumeGraphRow {
+  startDay: string;
+  endDay: string;
+  volume: string;
+}
+
+export interface VolumeGraphData {
+  [key: string] : VolumeGraphRow;
+}
 
 
 // Data(contracts) related types and interfaces.

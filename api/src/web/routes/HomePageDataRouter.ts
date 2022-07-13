@@ -1,7 +1,65 @@
 import BigNumber from "bignumber.js";
 import { Request, Response, Router } from "express";
 import { percentageChange } from "../../helpers";
-import { Dependecies } from "../../types";
+import { Dependecies, VolumeGraphData, VolumeGraphRow } from "../../types";
+import { getWeek, getYear, startOfWeek, lastDayOfWeek, getMonth, startOfMonth, lastDayOfMonth } from "date-fns";
+
+function createWeeklyData(dailyData: any[]): VolumeGraphRow[] {
+  const weeklyData: VolumeGraphData = {};
+  dailyData.forEach((data: { ts: number; volume: string }) => {
+    const date = new Date(data.ts * 1000);
+    const weekStartDate = startOfWeek(date); // Currently considering Sunday as start of the week. Can change by passing other day as options.
+    const weekEndDate = lastDayOfWeek(date); // Currently considering Sunday as start of the week. Can change by passing other day as options.
+    const weekNumber = getWeek(date);
+    const year = getYear(date);
+    const weekYear = `${weekNumber}-${year}`;
+    if (!weeklyData[weekYear]) {
+      weeklyData[weekYear] = {
+        startDay: `${weekStartDate.toLocaleString("en-GB", { month: "long" })} ${weekStartDate.toLocaleString("en-GB", {
+          day: "numeric",
+        })}, ${weekStartDate.toLocaleString("en-GB", { year: "numeric" })}`,
+        endDay: `${weekEndDate.toLocaleString("en-GB", { month: "long" })} ${weekEndDate.toLocaleString("en-GB", {
+          day: "numeric",
+        })}, ${weekEndDate.toLocaleString("en-GB", { year: "numeric" })}`,
+        volume: new BigNumber(data.volume).toString(),
+      };
+    } else {
+      weeklyData[weekYear].volume = new BigNumber(weeklyData[weekYear].volume)
+        .plus(new BigNumber(data.volume))
+        .toString();
+    }
+  });
+  return Object.values(weeklyData);
+}
+
+function createMonthlyData(dailyData: any[]): VolumeGraphRow[] {
+  const monthlyData: VolumeGraphData = {};
+  dailyData.forEach((data: { ts: number; volume: string }) => {
+    const date = new Date(data.ts * 1000);
+    const monthStartDate = startOfMonth(date);
+    const monthEndDate = lastDayOfMonth(date);
+    const monthNumber = getMonth(date);
+    const year = getYear(date);
+    const monthYear = `${monthNumber}-${year}`;
+    if (!monthlyData[monthYear]) {
+      monthlyData[monthYear] = {
+        startDay: `${monthStartDate.toLocaleString("en-GB", { month: "long" })} ${monthStartDate.toLocaleString("en-GB", {
+          day: "numeric",
+        })}, ${monthStartDate.toLocaleString("en-GB", { year: "numeric" })}`,
+        endDay: `${monthEndDate.toLocaleString("en-GB", { month: "long" })} ${monthEndDate.toLocaleString("en-GB", {
+          day: "numeric",
+        })}, ${monthEndDate.toLocaleString("en-GB", { year: "numeric" })}`,
+        volume: new BigNumber(data.volume).toString(),
+      };
+    } else {
+      monthlyData[monthYear].volume = new BigNumber(monthlyData[monthYear].volume)
+        .plus(new BigNumber(data.volume))
+        .toString();
+    }
+  });
+  return Object.values(monthlyData);
+}
+
 
 function build({ dbClient, data }: Dependecies): Router {
   const router = Router();
@@ -181,6 +239,53 @@ function build({ dbClient, data }: Dependecies): Router {
           .json({ data: { tvl24Hours: "0", percentageChange: "0" }, message: "NO_DATA_FOUND" });
       }
     } catch(error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
+  router.get("/weekly-volume-graph-data", async (_req: Request, res: Response) => {
+    try {
+      const now = Math.floor(new Date().getTime() / 1000);
+      const oneYearBack = Math.floor(
+        new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+      );
+      const volumeGraphData = await dbClient.get({
+        select: "sum(volume_usd) as volume, ts",
+        table: "amm_aggregate",
+        where: `ts >= ${oneYearBack} AND ts <= ${now} GROUP BY ts ORDER BY ts ASC`,
+      });
+      if (volumeGraphData.rowCount > 0) {
+        const responseData = createWeeklyData(volumeGraphData.rows);
+        res.status(200).json({ data: responseData, message: "SUCCESS" });
+      } else {
+        res.status(200).json({ data: [], message: "SUCCESS" });
+      }
+    } catch (error) {
+      res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
+      console.error(error.message);
+    }
+  });
+
+
+  router.get("/monthly-volume-graph-data", async (_req: Request, res: Response) => {
+    try {
+      const now = Math.floor(new Date().getTime() / 1000);
+      const oneYearBack = Math.floor(
+        new Date(new Date(new Date().setFullYear(new Date().getFullYear() - 1)).setHours(0, 0, 0, 0)).getTime() / 1000
+      );
+      const volumeGraphData = await dbClient.get({
+        select: "sum(volume_usd) as volume, ts",
+        table: "amm_aggregate",
+        where: `ts >= ${oneYearBack} AND ts <= ${now} GROUP BY ts ORDER BY ts ASC`,
+      });
+      if (volumeGraphData.rowCount > 0) {
+        const responseData = createMonthlyData(volumeGraphData.rows);
+        res.status(200).json({ data: responseData, message: "SUCCESS" });
+      } else {
+        res.status(200).json({ data: [], message: "SUCCESS" });
+      }
+    } catch (error) {
       res.status(500).json({ data: [], message: "INTERNAL_SERVER_ERROR" });
       console.error(error.message);
     }
