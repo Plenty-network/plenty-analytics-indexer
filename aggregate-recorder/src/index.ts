@@ -2,21 +2,20 @@ import { config } from "./config";
 import { buildDependencies } from "./dependencies";
 
 import HeartBeat from "./infrastructure/Heartbeat";
-import SwapProcessor from "./processors/SwapProcessor";
-
-
+import AggregateProcessor from "./processors/AggregateProcessor";
 
 (async () => {
   try {
     const dependencies = await buildDependencies(config);
 
     const heartbeat = new HeartBeat(config);
-    const swapProcesser = new SwapProcessor(dependencies);
+    const swapProcesser = new AggregateProcessor(dependencies);
 
     heartbeat.start();
     await dependencies.dbClient.init();
-    swapProcesser.process();
+    await swapProcesser.process(2543832);
   } catch (err) {
-    console.error(err.message);
+    console.error(err);
+    process.exit();
   }
 })();

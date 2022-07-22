@@ -19,8 +19,8 @@ services:
   block-watcher:
     build: ./block-watcher
 
-  swap-recorder:
-    build: ./swap-recorder
+  aggregate-recorder:
+    build: ./aggregate-recorder
     depends_on:
       db:
         condition: service_healthy

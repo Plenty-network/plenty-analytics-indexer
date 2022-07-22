@@ -1,6 +1,10 @@
 import DatabaseClient from "./infrastructure/DatabaseClient";
 import TzktProvider from "./infrastructure/TzktProvider";
 
+//===============
+// Service types
+//===============
+
 export interface Config {
   heartbeatURL: string;
   tzktURL: string;
@@ -29,6 +33,10 @@ export interface BlockData {
   timestamp: string;
 }
 
+//================
+// Database types
+//================
+
 export interface DatabaseGetParams {
   table: string;
   select: string;
@@ -46,6 +54,10 @@ export interface DatabaseUpdateParams {
   set: string;
   where: string;
 }
+
+//================
+// API call types
+//================
 
 export interface GetTransactionParameters {
   contract: string;
@@ -85,10 +97,11 @@ export interface Transaction {
   storage: any;
 }
 
+//=====================
+// Plenty config types
+//=====================
 
-// Data(contracts) related types and interfaces.
-
-export enum TokenType {
+export enum TokenVariant {
   TEZ = "TEZ",
   FA12 = "FA1.2",
   FA2 = "FA2",
@@ -97,10 +110,9 @@ export enum TokenType {
 export interface Token {
   address: string | undefined;
   symbol: string;
-  type: TokenType;
+  variant: TokenVariant;
   tokenId: number | undefined;
   decimals: number;
-  mapId: number | undefined;
 }
 
 export interface Tokens {
@@ -108,21 +120,16 @@ export interface Tokens {
 }
 
 export enum AmmType {
-  FLAT = "FLAT",
-  NORMAL = "NORMAL",
+  STABLE = "STABLE",
+  VOLATILE = "VOLATILE",
   META = "META",
 }
 
 export interface AmmContract {
   address: string;
-  token1: Token | string;
-  token2: Token | string;
+  token1: Token;
+  token2: Token;
   type: AmmType;
-  gaugeAddress: string | undefined;
-  bribeAddress: string | undefined;
-  token1Precision: string | undefined;
-  token2Precision: string | undefined;
-  lpToken: Token | string;
 }
 
 export interface AmmContracts {
@@ -130,6 +137,61 @@ export interface AmmContracts {
 }
 
 export interface Data {
-  tokens: Tokens;
   amm: AmmContracts;
+}
+
+//=================
+// Processor types
+//=================
+
+export enum PricingType {
+  SWAP = "SWAP",
+  STORAGE = "STORAGE",
+}
+
+export interface Pair {
+  token1: Token;
+  token1Pool: number;
+  token1Amount: number;
+  token2: Token;
+  token2Pool: number;
+  token2Amount: number;
+}
+
+export enum AggregateType {
+  HOUR = "HOUR",
+  DAY = "DAY",
+}
+
+export enum TransactionType {
+  SWAP_TOKEN_1 = "SWAP_TOKEN_1",
+  SWAP_TOKEN_2 = "SWAP_TOKEN_2",
+  ADD_LIQUIDITY = "ADD_LIQUIDITY",
+  REMOVE_LIQUIDITY = "REMOVE_LIQUIDITY",
+}
+
+export interface TransactionRecord {
+  ts: number;
+  type: TransactionType;
+  aggregateType: AggregateType;
+  amm: AmmContract;
+  token1: {
+    pool: number;
+    amount: number;
+    price: number;
+  };
+  token2: {
+    pool: number;
+    amount: number;
+    price: number;
+  };
+}
+
+export interface PlentyRecord {
+  ts: number;
+  aggregateType: AggregateType;
+  tradeValue: number;
+  feesValue: number;
+  lockedPrev: number;
+  locked: number;
 }

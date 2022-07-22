@@ -4,10 +4,14 @@ import DatabaseClient from "./infrastructure/DatabaseClient";
 import DataBuilder from "./infrastructure/DataBuilder";
 
 export const buildDependencies = async (config: Config): Promise<Dependecies> => {
-  return {
-    config,
-    dbClient: new DatabaseClient(config),
-    tzktProvider: new TzktProvider(config),
-    data: await new DataBuilder(config).buildData(),
-  };
+  try {
+    return {
+      config,
+      dbClient: new DatabaseClient(config),
+      tzktProvider: new TzktProvider(config),
+      data: await new DataBuilder(config).buildData(),
+    };
+  } catch (err) {
+    throw err;
+  }
 };
