@@ -150,12 +150,20 @@ export enum PricingType {
 }
 
 export interface Pair {
-  token1: Token;
-  token1Pool: number;
-  token1Amount: number;
-  token2: Token;
-  token2Pool: number;
-  token2Amount: number;
+  address: string;
+  type: AmmType;
+  token1: {
+    data: Token;
+    pool: number;
+    amount: number;
+    price: number;
+  };
+  token2: {
+    data: Token;
+    pool: number;
+    amount: number;
+    price: number;
+  };
 }
 
 export enum AggregateType {
@@ -174,17 +182,7 @@ export interface TransactionRecord {
   ts: number;
   type: TransactionType;
   aggregateType: AggregateType;
-  amm: AmmContract;
-  token1: {
-    pool: number;
-    amount: number;
-    price: number;
-  };
-  token2: {
-    pool: number;
-    amount: number;
-    price: number;
-  };
+  pair: Pair;
 }
 
 export interface PlentyRecord {

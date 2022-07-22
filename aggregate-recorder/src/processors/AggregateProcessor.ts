@@ -75,21 +75,29 @@ export default class AggregateProcessor {
             const [token1Pool, token2Pool] = this._getTokenPoolFromStorage(txn, amm);
 
             const pair: Pair = {
-              token1: amm.token1,
-              token1Pool,
-              token1Amount,
-              token2: amm.token2,
-              token2Pool,
-              token2Amount,
+              address: amm.address,
+              type: amm.type,
+              token1: {
+                data: amm.token1,
+                pool: token1Pool,
+                amount: token1Amount,
+                price: 0,
+              },
+              token2: {
+                data: amm.token2,
+                pool: token2Pool,
+                amount: token2Amount,
+                price: 0,
+              },
             };
 
             // Handle the transaction and pair based on the transaction type
             if (constants.ADD_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
-              await this._processLiquidityOperation(txn, pair, amm, TransactionType.ADD_LIQUIDITY);
+              await this._processLiquidityOperation(txn, pair, TransactionType.ADD_LIQUIDITY);
             } else if (constants.SWAP_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
-              await this._processSwapOperation(txn, pair, amm);
+              await this._processSwapOperation(txn, pair);
             } else if (constants.REMOVE_LIQUIDITY_ENTRYPOINS.includes(txn.parameter?.entrypoint)) {
-              await this._processLiquidityOperation(txn, pair, amm, TransactionType.REMOVE_LIQUIDITY);
+              await this._processLiquidityOperation(txn, pair, TransactionType.REMOVE_LIQUIDITY);
             }
           }
         }
@@ -102,12 +110,7 @@ export default class AggregateProcessor {
   /**
    * @description Handles add-liquidity and remove-liquidity transactions
    */
-  private async _processLiquidityOperation(
-    txn: Transaction,
-    pair: Pair,
-    amm: AmmContract,
-    type: TransactionType
-  ): Promise<void> {
+  private async _processLiquidityOperation(txn: Transaction, pair: Pair, type: TransactionType): Promise<void> {
     try {
       // Bring transaction timestamp to a suitable form
       const ts = Math.floor(new Date(txn.timestamp).getTime() / 1000);
@@ -115,12 +118,12 @@ export default class AggregateProcessor {
       let token1Price: number, token2Price: number;
 
       // If it's a volatile pair, calculate the token prices from the reserves
-      if (amm.type === AmmType.VOLATILE) {
+      if (pair.type === AmmType.VOLATILE) {
         [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.STORAGE);
       } else {
         // else for stable pairs, get the last record price of each token
-        token1Price = await this._getPriceAt(ts, amm.token1.symbol);
-        token2Price = await this._getPriceAt(ts, amm.token2.symbol);
+        token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
+        token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
 
         // If any one of the token does not have a recorded price,
         // assume that it's a fresh liquidity addition and try getting the price through reserves
@@ -129,9 +132,13 @@ export default class AggregateProcessor {
         }
       }
 
-      // Record spot price of the tokens (USDC.e is not recorded since it is priced at $1 all times)
-      if (amm.token1.symbol !== "USDC.e") await this._recordSpotPrice(ts, amm.token1, token1Price);
-      if (amm.token2.symbol !== "USDC.e") await this._recordSpotPrice(ts, amm.token2, token2Price);
+      // Set the prices in the pair object
+      pair.token1.price = token1Price;
+      pair.token2.price = token2Price;
+
+      // Record spot price of the tokens
+      await this._recordSpotPrice(ts, pair.token1.data, token1Price);
+      await this._recordSpotPrice(ts, pair.token2.data, token2Price);
 
       // Record the liquidity transaction
       await this._dbClient.insert({
@@ -150,11 +157,11 @@ export default class AggregateProcessor {
           ${txn.id},
           ${ts},
           '${txn.hash}',
-          '${amm.address}',
+          '${pair.address}',
           '${txn.initiator?.address ?? txn.sender?.address}',
-          ${pair.token1Amount},
-          ${pair.token2Amount},
-          ${pair.token1Amount * token1Price + pair.token2Amount * token2Price}
+          ${pair.token1.amount},
+          ${pair.token2.amount},
+          ${pair.token1.amount * token1Price + pair.token2.amount * token2Price}
         )`,
       });
 
@@ -163,17 +170,7 @@ export default class AggregateProcessor {
         ts,
         type,
         aggregateType: AggregateType.HOUR,
-        amm: amm,
-        token1: {
-          pool: pair.token1Pool,
-          amount: pair.token1Amount,
-          price: token1Price,
-        },
-        token2: {
-          pool: pair.token2Pool,
-          amount: pair.token2Amount,
-          price: token2Price,
-        },
+        pair,
       });
 
       // Record daily aggregate data for the tokens in the pair
@@ -181,17 +178,7 @@ export default class AggregateProcessor {
         ts,
         type,
         aggregateType: AggregateType.DAY,
-        amm: amm,
-        token1: {
-          pool: pair.token1Pool,
-          amount: pair.token1Amount,
-          price: token1Price,
-        },
-        token2: {
-          pool: pair.token2Pool,
-          amount: pair.token2Amount,
-          price: token2Price,
-        },
+        pair,
       });
     } catch (err) {
       throw err;
@@ -201,7 +188,7 @@ export default class AggregateProcessor {
   /**
    * @description processes a swap transaction and records the aggregate data.
    */
-  private async _processSwapOperation(txn: Transaction, pair: Pair, amm: AmmContract): Promise<void> {
+  private async _processSwapOperation(txn: Transaction, pair: Pair): Promise<void> {
     try {
       // Bring transaction timestamp to a suitable form
       const ts = Math.floor(new Date(txn.timestamp).getTime() / 1000);
@@ -211,15 +198,15 @@ export default class AggregateProcessor {
       let type: TransactionType;
 
       // Decide transaction type based on whether token 1 is swapped for token 2 or vice versa
-      if (amm.address === constants.TEZ_CTEZ_AMM_ADDRESS) {
+      if (pair.address === constants.TEZ_CTEZ_AMM_ADDRESS) {
         if (txn.parameter.entrypoint === constants.TEZ_SWAP_ENTRYPOINT) {
           type = TransactionType.SWAP_TOKEN_1; // token 1 is swapped for token 2
         } else {
           type = TransactionType.SWAP_TOKEN_2; // token 2 is swapped for token 1
         }
       } else if (
-        txn.parameter.value.requiredTokenAddress === amm.token2.address &&
-        txn.parameter.value.requiredTokenId === (amm.token2.tokenId?.toString() ?? "0")
+        txn.parameter.value.requiredTokenAddress === pair.token2.data.address &&
+        txn.parameter.value.requiredTokenId === (pair.token2.data.tokenId?.toString() ?? "0")
       ) {
         type = TransactionType.SWAP_TOKEN_1;
       } else {
@@ -227,16 +214,20 @@ export default class AggregateProcessor {
       }
 
       // For volatile pairs, use the token reserves (token-pool) to calculate price
-      if (amm.type === AmmType.VOLATILE) {
+      if (pair.type === AmmType.VOLATILE) {
         [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.STORAGE);
       } else {
         // For stable pairs, use the swap values (token-amount), since there is negligible slippage
         [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.SWAP);
       }
 
-      // Record spot price of the tokens (USDC.e is not recorded since it is priced at $1 all times)
-      if (amm.token1.symbol !== "USDC.e") await this._recordSpotPrice(ts, amm.token1, token1Price);
-      if (amm.token2.symbol !== "USDC.e") await this._recordSpotPrice(ts, amm.token2, token2Price);
+      // Set the prices in the pair object
+      pair.token1.price = token1Price;
+      pair.token2.price = token2Price;
+
+      // Record spot price of the tokens
+      await this._recordSpotPrice(ts, pair.token1.data, token1Price);
+      await this._recordSpotPrice(ts, pair.token2.data, token2Price);
 
       // This is true if token 1 is swapped for token 2
       const isSwap1 = type === TransactionType.SWAP_TOKEN_1;
@@ -259,12 +250,12 @@ export default class AggregateProcessor {
           ${txn.id},
           ${ts},
           '${txn.hash}',
-          '${amm.address}',
+          '${pair.address}',
           '${txn.initiator?.address ?? txn.sender?.address}',
           ${isSwap1},   
-          ${pair.token1Amount},
-          ${pair.token2Amount},
-          ${isSwap1 ? pair.token1Amount * token1Price : pair.token2Amount * token2Price}
+          ${pair.token1.amount},
+          ${pair.token2.amount},
+          ${isSwap1 ? pair.token1.amount * token1Price : pair.token2.amount * token2Price}
         )`,
       });
 
@@ -273,17 +264,7 @@ export default class AggregateProcessor {
         ts,
         type,
         aggregateType: AggregateType.HOUR,
-        amm: amm,
-        token1: {
-          pool: pair.token1Pool,
-          amount: pair.token1Amount,
-          price: token1Price,
-        },
-        token2: {
-          pool: pair.token2Pool,
-          amount: pair.token2Amount,
-          price: token2Price,
-        },
+        pair,
       });
 
       // Record hourly aggregate data for the tokens in the pair
@@ -291,17 +272,7 @@ export default class AggregateProcessor {
         ts,
         type,
         aggregateType: AggregateType.DAY,
-        amm: amm,
-        token1: {
-          pool: pair.token1Pool,
-          amount: pair.token1Amount,
-          price: token1Price,
-        },
-        token2: {
-          pool: pair.token2Pool,
-          amount: pair.token2Amount,
-          price: token2Price,
-        },
+        pair,
       });
     } catch (err) {
       throw err;
@@ -321,23 +292,23 @@ export default class AggregateProcessor {
       let token2Price: number;
 
       // For storage-based pricing use the token reserves, and for swap-based use the transaction token-amount
-      const token1Base = type === PricingType.STORAGE ? pair.token1Pool : pair.token1Amount;
-      const token2Base = type === PricingType.STORAGE ? pair.token2Pool : pair.token2Amount;
+      const token1Base = type === PricingType.STORAGE ? pair.token1.pool : pair.token1.amount;
+      const token2Base = type === PricingType.STORAGE ? pair.token2.pool : pair.token2.amount;
 
       // If USDC is one of the tokens, then use it as the dollar base.
-      if (pair.token1.symbol === "USDC.e") {
+      if (pair.token1.data.symbol === "USDC.e") {
         token1Price = 1;
         token2Price = token1Base / token2Base;
-      } else if (pair.token2.symbol === "USDC.e") {
+      } else if (pair.token2.data.symbol === "USDC.e") {
         token2Price = 1;
         token1Price = token2Base / token1Base;
       } else {
         // else use any one of the tokens that has a non-zero value
-        token2Price = await this._getPriceAt(ts, pair.token2.symbol);
+        token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
         if (token2Price !== 0) {
           token1Price = (token2Base * token2Price) / token1Base;
         } else {
-          token1Price = await this._getPriceAt(ts, pair.token1.symbol);
+          token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
           token2Price = (token1Base * token1Price) / token2Base;
         }
       }
@@ -375,23 +346,25 @@ export default class AggregateProcessor {
         // isSwapIn is true is the current token is a being swapped
         const isSwapIn = txr.type === TransactionType[`SWAP_TOKEN_${N}`];
 
-        const price = txr[`token${N}`].price;
-        const tokenAmount = txr[`token${N}`].amount;
+        const price = txr.pair[`token${N}`].price;
+        const tokenAmount = txr.pair[`token${N}`].amount;
 
         // The total dollar value of token involved in the txn
         const tokenValue = price * tokenAmount;
 
         // Fees calculated as 0.35% of stable trade value and 0.1% of volatile trade value
-        const feesAmount = txr.amm.type === AmmType.VOLATILE ? tokenAmount / 1000 : tokenAmount / 290;
-        const feesvalue = txr.amm.type === AmmType.VOLATILE ? tokenValue / 1000 : tokenValue / 290;
+        const feesAmount = txr.pair.type === AmmType.VOLATILE ? tokenAmount / 1000 : tokenAmount / 290;
+        const feesvalue = txr.pair.type === AmmType.VOLATILE ? tokenValue / 1000 : tokenValue / 290;
 
-        const lockedAmount = txr[`token${N}`].pool;
+        const lockedAmount = txr.pair[`token${N}`].pool;
         const lockedValue = lockedAmount * price;
+
+        const tokenSymbol = txr.pair[`token${N}`].data.symbol;
 
         const _entry = await this._dbClient.get({
           table,
           select: "*",
-          where: `ts=${ts} AND token='${txr.amm[`token${N}`].symbol}'`,
+          where: `ts=${ts} AND token='${tokenSymbol}'`,
         });
 
         // If no existing entry present for the timestamp, then insert a fresh record
@@ -400,7 +373,7 @@ export default class AggregateProcessor {
           const _entryMax = await this._dbClient.get({
             table,
             select: "MAX(ts)",
-            where: `token='${txr.amm[`token${N}`].symbol}'`,
+            where: `token='${tokenSymbol}'`,
           });
 
           let lockedPrev = 0;
@@ -410,7 +383,7 @@ export default class AggregateProcessor {
             const __entry = await this._dbClient.get({
               table,
               select: "*",
-              where: `ts=${_entryMax.rows[0].max} AND token='${txr.amm[`token${N}`].symbol}'`,
+              where: `ts=${_entryMax.rows[0].max} AND token='${tokenSymbol}'`,
             });
             lockedPrev = parseFloat(__entry.rows[0].locked_value);
           }
@@ -435,7 +408,7 @@ export default class AggregateProcessor {
             )`,
             values: `(
             ${ts}, 
-            '${txr.amm[`token${N}`].symbol}', 
+            '${tokenSymbol}', 
             ${price}, 
             ${price}, 
             ${price}, 
@@ -480,7 +453,7 @@ export default class AggregateProcessor {
               locked=${lockedAmount}, 
               locked_value=${lockedValue}
           `,
-            where: `ts=${ts} AND token='${txr.amm[`token${N}`].symbol}'`,
+            where: `ts=${ts} AND token='${tokenSymbol}'`,
           });
 
           // Record system wide aggregate
@@ -606,21 +579,21 @@ export default class AggregateProcessor {
       const isToken2Swap = txr.type === TransactionType.SWAP_TOKEN_2;
 
       // Possible volume and fees for token 1
-      const token1Amount = txr.token1.amount;
-      const token1Value = token1Amount * txr.token1.price;
-      const token1FeesAmount = txr.amm.type === AmmType.VOLATILE ? token1Amount / 1000 : token1Amount / 290;
-      const token1FeesValue = txr.amm.type === AmmType.VOLATILE ? token1Value / 1000 : token1Value / 290;
+      const token1Amount = txr.pair.token1.amount;
+      const token1Value = token1Amount * txr.pair.token1.price;
+      const token1FeesAmount = txr.pair.type === AmmType.VOLATILE ? token1Amount / 1000 : token1Amount / 290;
+      const token1FeesValue = txr.pair.type === AmmType.VOLATILE ? token1Value / 1000 : token1Value / 290;
 
       // Possible volume and fees for token 2
-      const token2Amount = txr.token2.amount;
-      const token2Value = token2Amount * txr.token2.price;
-      const token2FeesAmount = txr.amm.type === AmmType.VOLATILE ? token2Amount / 1000 : token2Amount / 290;
-      const token2FeesValue = txr.amm.type === AmmType.VOLATILE ? token2Value / 1000 : token2Value / 290;
+      const token2Amount = txr.pair.token2.amount;
+      const token2Value = token2Amount * txr.pair.token2.price;
+      const token2FeesAmount = txr.pair.type === AmmType.VOLATILE ? token2Amount / 1000 : token2Amount / 290;
+      const token2FeesValue = txr.pair.type === AmmType.VOLATILE ? token2Value / 1000 : token2Value / 290;
 
       const _entry = await this._dbClient.get({
         table,
         select: "*",
-        where: `ts=${ts} AND amm='${txr.amm.address}'`,
+        where: `ts=${ts} AND amm='${txr.pair.address}'`,
       });
 
       // Set volume and fees based on it's a token 1 or token 2 swap in
@@ -645,7 +618,7 @@ export default class AggregateProcessor {
           )`,
           values: `(
             ${ts},
-            '${txr.amm.address}',
+            '${txr.pair.address}',
             ${isToken1Swap ? token1Amount : 0},
             ${isToken1Swap ? token1Value : 0},
             ${isToken2Swap ? token2Amount : 0},
@@ -654,10 +627,10 @@ export default class AggregateProcessor {
             ${isToken1Swap ? token1FeesValue : 0},
             ${isToken2Swap ? token2FeesAmount : 0},
             ${isToken2Swap ? token2FeesValue : 0},
-            ${txr.token1.pool},
-            ${txr.token1.pool * txr.token1.price},
-            ${txr.token2.pool},
-            ${txr.token2.pool * txr.token2.price}
+            ${txr.pair.token1.pool},
+            ${txr.pair.token1.pool * txr.pair.token1.price},
+            ${txr.pair.token2.pool},
+            ${txr.pair.token2.pool * txr.pair.token2.price}
           )`,
         });
       } else {
@@ -682,12 +655,12 @@ export default class AggregateProcessor {
             token_1_fees_value=${isToken1Swap ? _entryToken1FeesValue + token1FeesValue : _entryToken1FeesValue},
             token_2_fees=${isToken2Swap ? _entryToken2Fees + token2FeesAmount : _entryToken2Fees},
             token_2_fees_value=${isToken2Swap ? _entryToken2FeesValue + token2FeesValue : _entryToken2FeesValue},
-            token_1_locked=${txr.token1.pool},
-            token_1_locked_value=${txr.token1.pool * txr.token1.price},
-            token_2_locked=${txr.token2.pool},
-            token_2_locked_value=${txr.token2.pool * txr.token2.price}
+            token_1_locked=${txr.pair.token1.pool},
+            token_1_locked_value=${txr.pair.token1.pool * txr.pair.token1.price},
+            token_2_locked=${txr.pair.token2.pool},
+            token_2_locked_value=${txr.pair.token2.pool * txr.pair.token2.price}
           `,
-          where: `ts=${ts} AND amm='${txr.amm.address}'`,
+          where: `ts=${ts} AND amm='${txr.pair.address}'`,
         });
       }
     } catch (err) {
@@ -700,6 +673,9 @@ export default class AggregateProcessor {
    */
   private async _recordSpotPrice(ts: number, token: Token, price: number): Promise<void> {
     try {
+      // Do not record, since USDC.e is set to $1
+      if (token.symbol === "USDC.e") return;
+
       const _entry = await this._dbClient.get({
         table: "price_spot",
         select: "token",

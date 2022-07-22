@@ -16,5 +16,6 @@ export const constants = {
   NORMAL_SWAP_ENTRYPOINT: "Swap",
   TEZ_SWAP_ENTRYPOINT: "tez_to_ctez",
   CTEZ_SWAP_ENTRYPOINT: "ctez_to_tez",
-  INDEXING_START_LEVEL: 2391901, // USDC.e - ctez first operation level
+  // Todo: change to a suitable timing
+  INDEXING_START_LEVEL: 2525525, // USDC.e - ctez first operation level on 12th July, 2022
 };

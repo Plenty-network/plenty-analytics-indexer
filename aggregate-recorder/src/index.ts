@@ -13,7 +13,7 @@ import AggregateProcessor from "./processors/AggregateProcessor";
 
     heartbeat.start();
     await dependencies.dbClient.init();
-    await swapProcesser.process(2543832);
+    await swapProcesser.process(2555892);
   } catch (err) {
     console.error(err);
     process.exit();
