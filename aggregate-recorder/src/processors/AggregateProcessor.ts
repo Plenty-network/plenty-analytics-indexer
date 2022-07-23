@@ -445,7 +445,7 @@ export default class AggregateProcessor {
             set: `
               high_price=${Math.max(price, parseFloat(_entry.rows[0].high_price))}, 
               low_price=${Math.min(price, parseFloat(_entry.rows[0].low_price))},
-              close_price=${price}, 
+              close_price=${price},
               volume=${isSwapIn ? _entryVolume + tokenAmount : _entryVolume},
               volume_value=${isSwapIn ? _entryVolumeValue + tokenValue : _entryVolumeValue}, 
               fees=${isSwapIn ? _entryFees + feesAmount : _entryFees}, 
@@ -841,7 +841,11 @@ export default class AggregateProcessor {
         const _entry = await this._dbClient.get({
           table: "price_spot",
           select: "value",
-          where: `ts<=${ts} AND token='${tokenSymbol}'`,
+          where: `
+            token='${tokenSymbol}'
+             AND
+            ts=(SELECT MAX(ts) FROM price_spot WHERE token='${tokenSymbol}' AND ts<=${ts})  
+          `,
         });
         if (_entry.rowCount === 0) {
           return 0;

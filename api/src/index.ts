@@ -1,17 +1,21 @@
 import { config } from "./config";
-import { buildDependencies } from "./dependencies";
+import { Server } from "http";
 import { httpServer } from "./web/Server";
+import { buildDependencies } from "./dependencies";
+
 import HeartBeat from "./infrastructure/Heartbeat";
 
 const heartbeat = new HeartBeat(config);
+
+let server: Server;
 
 (async () => {
   try {
     heartbeat.start();
     const dependencies = await buildDependencies(config);
     await dependencies.dbClient.init();
-    const server = httpServer(dependencies).listen(config.port, () => {
-      console.log(`Express server started on port: ${config.port}`);
+    server = httpServer(dependencies).listen(config.expressPort, () => {
+      console.log(`Express server started on port: ${config.expressPort}`);
     });
     process.on("SIGTERM", () => {
       console.log("Server stopping...");
@@ -21,5 +25,8 @@ const heartbeat = new HeartBeat(config);
     });
   } catch (err) {
     console.error(err.message);
+    server.close(() => {
+      process.exit(0);
+    });
   }
 })();
