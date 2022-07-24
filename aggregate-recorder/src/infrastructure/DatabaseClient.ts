@@ -63,8 +63,7 @@ export default class DatabaseClient {
         `CREATE TABLE IF NOT EXISTS plenty_aggregate_hour (
           ts NUMERIC PRIMARY KEY,
           volume_value NUMERIC(15, 6) NOT NULL,
-          fees_value NUMERIC(15, 6) NOT NULL,
-          locked_value NUMERIC(15, 6) NOT NULL
+          fees_value NUMERIC(15, 6) NOT NULL
         );`
       );
 
@@ -72,8 +71,7 @@ export default class DatabaseClient {
         `CREATE TABLE IF NOT EXISTS plenty_aggregate_day (
           ts NUMERIC PRIMARY KEY,
           volume_value NUMERIC(15, 6) NOT NULL,
-          fees_value NUMERIC(15, 6) NOT NULL,
-          locked_value NUMERIC(15, 6) NOT NULL
+          fees_value NUMERIC(15, 6) NOT NULL
         );`
       );
 
@@ -89,8 +87,6 @@ export default class DatabaseClient {
           volume_value NUMERIC (15, 6) NOT NULL,
           fees NUMERIC (15, 6) NOT NULL,
           fees_value NUMERIC(15, 6) NOT NULL,
-          locked NUMERIC(15, 6) NOT NULL,
-          locked_value NUMERIC(15, 6) NOT NULL,
           PRIMARY KEY (ts, token)
         );`
       );
@@ -107,8 +103,6 @@ export default class DatabaseClient {
           volume_value NUMERIC (15, 6) NOT NULL,
           fees NUMERIC (15, 6) NOT NULL,
           fees_value NUMERIC(15, 6) NOT NULL,
-          locked NUMERIC(15, 6) NOT NULL,
-          locked_value NUMERIC(15, 6) NOT NULL,
           PRIMARY KEY (ts, token)
         );`
       );

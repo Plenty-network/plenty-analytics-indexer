@@ -44,9 +44,10 @@ export default class AggregateProcessor {
         for (const hash of operationHashes) {
           // Fetch individual operations and process them
           const operation = await this._tkztProvider.getOperation(hash);
-          await this._processOperation(operation, this._data.amm[ammAddress]);
           // Record the indexed level
           await this._recordLastIndexed(this._data.amm[ammAddress], operation[0].level);
+          // Handle the relevant transactions in the operation object
+          await this._processOperation(operation, this._data.amm[ammAddress]);
         }
       }
     } catch (err) {
@@ -74,6 +75,7 @@ export default class AggregateProcessor {
             // Pair token reserves during the transaction
             const [token1Pool, token2Pool] = this._getTokenPoolFromStorage(txn, amm);
 
+            // Details of the involved in the txn
             const pair: Pair = {
               address: amm.address,
               type: amm.type,
@@ -165,16 +167,16 @@ export default class AggregateProcessor {
         )`,
       });
 
-      // Record hourly aggregate data for the tokens in the pair
-      await this._recordTokenAggregate({
+      // Record hourly aggregate data for the AMM
+      await this._recordAMMAggregate({
         ts,
         type,
         aggregateType: AggregateType.HOUR,
         pair,
       });
 
-      // Record daily aggregate data for the tokens in the pair
-      await this._recordTokenAggregate({
+      // Record daily aggregate data for the AMM
+      await this._recordAMMAggregate({
         ts,
         type,
         aggregateType: AggregateType.DAY,
@@ -259,16 +261,16 @@ export default class AggregateProcessor {
         )`,
       });
 
-      // Record hourly aggregate data for the tokens in the pair
-      await this._recordTokenAggregate({
+      // Record hourly aggregate data for the AMM
+      await this._recordAMMAggregate({
         ts,
         type,
         aggregateType: AggregateType.HOUR,
         pair,
       });
 
-      // Record hourly aggregate data for the tokens in the pair
-      await this._recordTokenAggregate({
+      // Record hourly aggregate data for the AMM
+      await this._recordAMMAggregate({
         ts,
         type,
         aggregateType: AggregateType.DAY,
@@ -279,290 +281,9 @@ export default class AggregateProcessor {
     }
   }
 
-  //===================
-  // Value calculators
-  //===================
-
-  /**
-   * @description Calculate the spot price of a token pair at a given timestamp
-   */
-  private async _calculatePrice(ts: number, pair: Pair, type: PricingType): Promise<[number, number]> {
-    try {
-      let token1Price: number;
-      let token2Price: number;
-
-      // For storage-based pricing use the token reserves, and for swap-based use the transaction token-amount
-      const token1Base = type === PricingType.STORAGE ? pair.token1.pool : pair.token1.amount;
-      const token2Base = type === PricingType.STORAGE ? pair.token2.pool : pair.token2.amount;
-
-      // If USDC is one of the tokens, then use it as the dollar base.
-      if (pair.token1.data.symbol === "USDC.e") {
-        token1Price = 1;
-        token2Price = token1Base / token2Base;
-      } else if (pair.token2.data.symbol === "USDC.e") {
-        token2Price = 1;
-        token1Price = token2Base / token1Base;
-      } else {
-        // else use any one of the tokens that has a non-zero value
-        token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
-        if (token2Price !== 0) {
-          token1Price = (token2Base * token2Price) / token1Base;
-        } else {
-          token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
-          token2Price = (token1Base * token1Price) / token2Base;
-        }
-      }
-
-      return [token1Price, token2Price];
-    } catch (err) {
-      throw err;
-    }
-  }
-
   //=====================
   // Assisting recorders
   //=====================
-
-  /**
-   * @description Records token specific analytics data in token_aggregate_X tables and calls
-   * _recordPlentyAggregate to record system wide analytics data, and _recordAMMAggregate to record
-   * AMM specific analytics data.
-   */
-  private async _recordTokenAggregate(txr: TransactionRecord): Promise<void> {
-    try {
-      const table = `token_aggregate_${txr.aggregateType.toLowerCase()}`;
-
-      // Get the start timestamp (UTC) of the hour/day in which txn timestamp is present
-      const ts =
-        txr.aggregateType === AggregateType.HOUR
-          ? Math.floor(txr.ts / 3600) * 3600
-          : Math.floor(txr.ts / 86400) * 86400;
-
-      // Represents token1 and token2
-      const arr: [1, 2] = [1, 2];
-
-      // Iterate through both tokens
-      for (const N of arr) {
-        // isSwapIn is true is the current token is a being swapped
-        const isSwapIn = txr.type === TransactionType[`SWAP_TOKEN_${N}`];
-
-        const price = txr.pair[`token${N}`].price;
-        const tokenAmount = txr.pair[`token${N}`].amount;
-
-        // The total dollar value of token involved in the txn
-        const tokenValue = price * tokenAmount;
-
-        // Fees calculated as 0.35% of stable trade value and 0.1% of volatile trade value
-        const feesAmount = txr.pair.type === AmmType.VOLATILE ? tokenAmount / 1000 : tokenAmount / 290;
-        const feesvalue = txr.pair.type === AmmType.VOLATILE ? tokenValue / 1000 : tokenValue / 290;
-
-        const lockedAmount = txr.pair[`token${N}`].pool;
-        const lockedValue = lockedAmount * price;
-
-        const tokenSymbol = txr.pair[`token${N}`].data.symbol;
-
-        const _entry = await this._dbClient.get({
-          table,
-          select: "*",
-          where: `ts=${ts} AND token='${tokenSymbol}'`,
-        });
-
-        // If no existing entry present for the timestamp, then insert a fresh record
-        if (_entry.rowCount === 0) {
-          // Get last entry i.e the maximum timestamp registered till now
-          const _entryMax = await this._dbClient.get({
-            table,
-            select: "MAX(ts)",
-            where: `token='${tokenSymbol}'`,
-          });
-
-          let lockedPrev = 0;
-
-          // If there is a last entry then get its locked value
-          if (_entryMax.rows[0].max) {
-            const __entry = await this._dbClient.get({
-              table,
-              select: "*",
-              where: `ts=${_entryMax.rows[0].max} AND token='${tokenSymbol}'`,
-            });
-            lockedPrev = parseFloat(__entry.rows[0].locked_value);
-          }
-
-          // Set OHLC price as the current price and carry over the locked value from previous entry.
-          // Volume and fees is set to > 0 only when the token is being swapped in
-          await this._dbClient.insert({
-            table,
-            columns: `(
-              ts, 
-              token, 
-              open_price,
-              high_price,
-              low_price,
-              close_price,
-              volume,
-              volume_value, 
-              fees,
-              fees_value, 
-              locked, 
-              locked_value
-            )`,
-            values: `(
-            ${ts}, 
-            '${tokenSymbol}', 
-            ${price}, 
-            ${price}, 
-            ${price}, 
-            ${price}, 
-            ${isSwapIn ? tokenAmount : 0},
-            ${isSwapIn ? tokenValue : 0},
-            ${isSwapIn ? feesAmount : 0},
-            ${isSwapIn ? feesvalue : 0}, 
-            ${lockedAmount}, 
-            ${lockedValue}
-          )`,
-          });
-
-          // Record system wide aggregate
-          await this._recordPlentyAggregate({
-            ts,
-            aggregateType: txr.aggregateType,
-            tradeValue: isSwapIn ? tokenValue : 0,
-            feesValue: isSwapIn ? feesvalue : 0,
-            lockedPrev,
-            locked: lockedValue,
-          });
-        } else {
-          // Existing volume and fees
-          const _entryVolume = parseFloat(_entry.rows[0].volume);
-          const _entryVolumeValue = parseFloat(_entry.rows[0].volume_value);
-          const _entryFees = parseFloat(_entry.rows[0].fees);
-          const _entryFeesValue = parseFloat(_entry.rows[0].fees_value);
-
-          // Update existing record by conditionally updating the HLC price,
-          // and adding onto previous volume and fees if it's a swap in.
-          await this._dbClient.update({
-            table,
-            set: `
-              high_price=${Math.max(price, parseFloat(_entry.rows[0].high_price))}, 
-              low_price=${Math.min(price, parseFloat(_entry.rows[0].low_price))},
-              close_price=${price},
-              volume=${isSwapIn ? _entryVolume + tokenAmount : _entryVolume},
-              volume_value=${isSwapIn ? _entryVolumeValue + tokenValue : _entryVolumeValue}, 
-              fees=${isSwapIn ? _entryFees + feesAmount : _entryFees}, 
-              fees_value=${isSwapIn ? _entryFeesValue + feesvalue : _entryFeesValue}, 
-              locked=${lockedAmount}, 
-              locked_value=${lockedValue}
-          `,
-            where: `ts=${ts} AND token='${tokenSymbol}'`,
-          });
-
-          // Record system wide aggregate
-          await this._recordPlentyAggregate({
-            ts,
-            aggregateType: txr.aggregateType,
-            tradeValue: isSwapIn ? tokenValue : 0,
-            feesValue: isSwapIn ? feesvalue : 0,
-            lockedPrev: _entry.rows[0].locked_value,
-            locked: lockedValue,
-          });
-        }
-      }
-
-      // Record AMM specific data
-      await this._recordAMMAggregate(txr);
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  /**
-   * @description Records system wide aggregate across all plenty AMMs
-   */
-  private async _recordPlentyAggregate(plr: PlentyRecord): Promise<void> {
-    try {
-      const table = `plenty_aggregate_${plr.aggregateType.toLowerCase()}`;
-
-      const _entry = await this._dbClient.get({
-        table,
-        select: "*",
-        where: `ts=${plr.ts}`,
-      });
-
-      if (_entry.rowCount === 0) {
-        // Retrieve the last record i.e the row with max ts
-        const _entryMax = await this._dbClient.get({
-          table,
-          select: "MAX(ts)",
-          where: `ts!=0`,
-        });
-
-        if (!_entryMax.rows[0].max) {
-          // First entry in plenty_aggregate
-          await this._dbClient.insert({
-            table,
-            columns: `(
-              ts, 
-              volume_value, 
-              fees_value, 
-              locked_value
-            )`,
-            values: `(
-              ${plr.ts}, 
-              ${plr.tradeValue}, 
-              ${plr.feesValue}, 
-              ${plr.locked}
-            )`,
-          });
-        } else {
-          // Get existing locked value
-          const __entry = await this._dbClient.get({
-            table,
-            select: "locked_value",
-            where: `ts=${_entryMax.rows[0].max}`,
-          });
-
-          const __entryLockedValue = parseFloat(__entry.rows[0].locked_value);
-
-          // Previous locked value (received from token-aggregate table) is subtracted and
-          // latest locked value is added to account for token price and amount difference across time
-          await this._dbClient.insert({
-            table,
-            columns: `(
-              ts, 
-              volume_value, 
-              fees_value, 
-              locked_value
-            )`,
-            values: `(
-              ${plr.ts}, 
-              ${plr.tradeValue}, 
-              ${plr.feesValue}, 
-              ${__entryLockedValue - plr.lockedPrev + plr.locked}
-            )`,
-          });
-        }
-      } else {
-        // Existing values for each field at a given timestamp
-        const _entryVolumeValue = parseFloat(_entry.rows[0].volume_value);
-        const _entryFeesValue = parseFloat(_entry.rows[0].fees_value);
-        const _entryLockedValue = parseFloat(_entry.rows[0].locked_value);
-
-        // Add volume and fees to existing values and
-        // update the locked value as described above
-        await this._dbClient.update({
-          table,
-          set: ` 
-            volume_value=${_entryVolumeValue + plr.tradeValue}, 
-            fees_value=${_entryFeesValue + plr.feesValue}, 
-            locked_value=${_entryLockedValue - plr.lockedPrev + plr.locked}
-          `,
-          where: `ts=${plr.ts}`,
-        });
-      }
-    } catch (err) {
-      throw err;
-    }
-  }
 
   private async _recordAMMAggregate(txr: TransactionRecord): Promise<void> {
     try {
@@ -663,6 +384,172 @@ export default class AggregateProcessor {
           where: `ts=${ts} AND amm='${txr.pair.address}'`,
         });
       }
+
+      // Record token wise aggregate data
+      await this._recordTokenAggregate(txr);
+
+      // Record system wide aggregate if it's a swap
+      if (isToken1Swap) {
+        await this._recordPlentyAggregate({
+          ts,
+          aggregateType: txr.aggregateType,
+          tradeValue: token1Value,
+          feesValue: token1FeesValue,
+        });
+      } else if (isToken2Swap) {
+        await this._recordPlentyAggregate({
+          ts,
+          aggregateType: txr.aggregateType,
+          tradeValue: token2Value,
+          feesValue: token2FeesValue,
+        });
+      }
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  /**
+   * @description Records token specific analytics data in token_aggregate_X tables
+   */
+  private async _recordTokenAggregate(txr: TransactionRecord): Promise<void> {
+    try {
+      const table = `token_aggregate_${txr.aggregateType.toLowerCase()}`;
+
+      // Get the start timestamp (UTC) of the hour/day in which txn timestamp is present
+      const ts =
+        txr.aggregateType === AggregateType.HOUR
+          ? Math.floor(txr.ts / 3600) * 3600
+          : Math.floor(txr.ts / 86400) * 86400;
+
+      // Represents token1 and token2
+      const arr: [1, 2] = [1, 2];
+
+      // Iterate through both tokens
+      for (const N of arr) {
+        // isSwapIn is true is the current token is a being swapped
+        const isSwapIn = txr.type === TransactionType[`SWAP_TOKEN_${N}`];
+
+        // Store field values in variables for ease-of-use
+        const price = txr.pair[`token${N}`].price;
+        const tokenAmount = txr.pair[`token${N}`].amount;
+        const tokenSymbol = txr.pair[`token${N}`].data.symbol;
+
+        // The total dollar value of token involved in the txn
+        const tokenValue = price * tokenAmount;
+
+        // Fees calculated as 0.35% of stable trade value and 0.1% of volatile trade value
+        const feesAmount = txr.pair.type === AmmType.VOLATILE ? tokenAmount / 1000 : tokenAmount / 290;
+        const feesvalue = txr.pair.type === AmmType.VOLATILE ? tokenValue / 1000 : tokenValue / 290;
+
+        const _entry = await this._dbClient.get({
+          table,
+          select: "*",
+          where: `ts=${ts} AND token='${tokenSymbol}'`,
+        });
+
+        // If no existing entry present for the timestamp, then insert a fresh record
+        if (_entry.rowCount === 0) {
+          // Set OHLC price as the current price and carry over the locked value from previous entry.
+          // Volume and fees is set to > 0 only when the token is being swapped in
+          await this._dbClient.insert({
+            table,
+            columns: `(
+              ts, 
+              token, 
+              open_price,
+              high_price,
+              low_price,
+              close_price,
+              volume,
+              volume_value, 
+              fees,
+              fees_value
+            )`,
+            values: `(
+            ${ts}, 
+            '${tokenSymbol}', 
+            ${price}, 
+            ${price}, 
+            ${price}, 
+            ${price}, 
+            ${isSwapIn ? tokenAmount : 0},
+            ${isSwapIn ? tokenValue : 0},
+            ${isSwapIn ? feesAmount : 0},
+            ${isSwapIn ? feesvalue : 0}
+          )`,
+          });
+        } else {
+          // Existing volume and fees
+          const _entryVolume = parseFloat(_entry.rows[0].volume);
+          const _entryVolumeValue = parseFloat(_entry.rows[0].volume_value);
+          const _entryFees = parseFloat(_entry.rows[0].fees);
+          const _entryFeesValue = parseFloat(_entry.rows[0].fees_value);
+
+          // Update existing record by conditionally updating the HLC price,
+          // and adding onto previous volume and fees if it's a swap in.
+          await this._dbClient.update({
+            table,
+            set: `
+              high_price=${Math.max(price, parseFloat(_entry.rows[0].high_price))}, 
+              low_price=${Math.min(price, parseFloat(_entry.rows[0].low_price))},
+              close_price=${price},
+              volume=${isSwapIn ? _entryVolume + tokenAmount : _entryVolume},
+              volume_value=${isSwapIn ? _entryVolumeValue + tokenValue : _entryVolumeValue}, 
+              fees=${isSwapIn ? _entryFees + feesAmount : _entryFees}, 
+              fees_value=${isSwapIn ? _entryFeesValue + feesvalue : _entryFeesValue}
+          `,
+            where: `ts=${ts} AND token='${tokenSymbol}'`,
+          });
+        }
+      }
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  /**
+   * @description Records system wide aggregate across all plenty AMMs
+   */
+  private async _recordPlentyAggregate(plr: PlentyRecord): Promise<void> {
+    try {
+      const table = `plenty_aggregate_${plr.aggregateType.toLowerCase()}`;
+
+      const _entry = await this._dbClient.get({
+        table,
+        select: "*",
+        where: `ts=${plr.ts}`,
+      });
+
+      if (_entry.rowCount === 0) {
+        await this._dbClient.insert({
+          table,
+          columns: `(
+              ts, 
+              volume_value, 
+              fees_value
+            )`,
+          values: `(
+              ${plr.ts}, 
+              ${plr.tradeValue}, 
+              ${plr.feesValue}
+            )`,
+        });
+      } else {
+        // Existing values for each field at a given timestamp
+        const _entryVolumeValue = parseFloat(_entry.rows[0].volume_value);
+        const _entryFeesValue = parseFloat(_entry.rows[0].fees_value);
+
+        // Add volume and fees to existing values
+        await this._dbClient.update({
+          table,
+          set: ` 
+            volume_value=${_entryVolumeValue + plr.tradeValue}, 
+            fees_value=${_entryFeesValue + plr.feesValue}
+          `,
+          where: `ts=${plr.ts}`,
+        });
+      }
     } catch (err) {
       throw err;
     }
@@ -724,6 +611,46 @@ export default class AggregateProcessor {
           values: `('${amm.address}', ${level})`,
         });
       }
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  //===================
+  // Value calculators
+  //===================
+
+  /**
+   * @description Calculate the spot price of a token pair at a given timestamp
+   */
+  private async _calculatePrice(ts: number, pair: Pair, type: PricingType): Promise<[number, number]> {
+    try {
+      let token1Price: number;
+      let token2Price: number;
+
+      // For storage-based pricing use the token reserves, and for swap-based use the transaction token-amount
+      const token1Base = type === PricingType.STORAGE ? pair.token1.pool : pair.token1.amount;
+      const token2Base = type === PricingType.STORAGE ? pair.token2.pool : pair.token2.amount;
+
+      // If USDC is one of the tokens, then use it as the dollar base.
+      if (pair.token1.data.symbol === "USDC.e") {
+        token1Price = 1;
+        token2Price = token1Base / token2Base;
+      } else if (pair.token2.data.symbol === "USDC.e") {
+        token2Price = 1;
+        token1Price = token2Base / token1Base;
+      } else {
+        // else use any one of the tokens that has a non-zero value
+        token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
+        if (token2Price !== 0) {
+          token1Price = (token2Base * token2Price) / token1Base;
+        } else {
+          token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
+          token2Price = (token1Base * token1Price) / token2Base;
+        }
+      }
+
+      return [token1Price, token2Price];
     } catch (err) {
       throw err;
     }
@@ -872,7 +799,7 @@ export default class AggregateProcessor {
       if (_entry.rowCount === 0) {
         return [constants.INDEXING_START_LEVEL, this._lastLevel];
       } else {
-        return [_entry.rows[0].level + 1, this._lastLevel];
+        return [parseInt(_entry.rows[0].level) + 1, this._lastLevel];
       }
     } catch (err) {
       throw err;

@@ -122,7 +122,6 @@ export interface Tokens {
 export enum AmmType {
   STABLE = "STABLE",
   VOLATILE = "VOLATILE",
-  META = "META",
 }
 
 export interface AmmContract {
@@ -190,6 +189,4 @@ export interface PlentyRecord {
   aggregateType: AggregateType;
   tradeValue: number;
   feesValue: number;
-  lockedPrev: number;
-  locked: number;
 }
