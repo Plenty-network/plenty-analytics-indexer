@@ -1,13 +1,13 @@
 import { Router } from "express";
-import TokensDataRouter from "./TokensDataRouter";
-// import TokensDataRouter from "./TokensDataRouter";
+import TokensRouter from "./TokensRouter";
+import PlentyRouter from "./PlentyRouter";
 
-import { Dependecies } from "../../types";
+import { Dependencies } from "../../types";
 
-function build(dependencies: Dependecies): Router {
+function build(dependencies: Dependencies): Router {
   const router = Router();
-  router.use("/tokens", TokensDataRouter(dependencies));
-  // router.use("/plenty", );
+  router.use("/tokens", TokensRouter(dependencies));
+  router.use("/plenty", PlentyRouter(dependencies));
   return router;
 }
 

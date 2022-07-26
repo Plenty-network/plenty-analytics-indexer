@@ -1,12 +1,15 @@
 import { Request, Response, Router } from "express";
-import { Dependecies, PriceOHLC, TokenResponse } from "../../types";
 import { convertToMap, percentageChange } from "../../utils";
+import { Dependencies, PriceOHLC, TokenResponse } from "../../types";
 
-function build({ dbClient, data }: Dependecies): Router {
+function build({ cache, config, getData, dbClient }: Dependencies): Router {
   const router = Router();
 
   router.get("/:token?", async (req: Request<{ token: string | undefined }>, res: Response) => {
     try {
+      // Fetch system wide amm and token data
+      const data = await getData();
+
       // Check request params validity
       if (req.params.token && !data.token.includes(req.params.token)) {
         res.json({ error: "Token does not exist." });
@@ -17,7 +20,7 @@ function build({ dbClient, data }: Dependecies): Router {
       const t48h = tch - 48 * 3600; // Current hourly - 48 hours
       const t24h = tch - 24 * 3600; // Current hourly - 24 hours
       const t7d = tch - 7 * 86400; // Current hourly - 7 days
-      const t1Y = tch - 365 * 86400; // Current hourly - 1 year
+      const t1y = tch - 365 * 86400; // Current hourly - 1 year
 
       // Fetch aggregated token records between two timestamps
       async function getAggregate(ts1: number, ts2: number) {
@@ -29,15 +32,48 @@ function build({ dbClient, data }: Dependecies): Router {
       }
 
       // Fetch aggregated token record closest (<=) to supplied timestamp
-      async function getLastAggregate(ts: number) {
+      async function getClosePriceAggregate(ts: number) {
         return await dbClient.raw(`
-          SELECT t.token, t.close_price, t.locked_value 
+          SELECT t.token, t.close_price
           FROM (
             SELECT MAX(ts) mts, token 
             FROM token_aggregate_hour WHERE ts<=${ts} GROUP BY token
           ) r
-          JOIN token_aggregate_hour t on
+          JOIN token_aggregate_hour t ON
             t.token=r.token AND t.ts=r.mts;
+        `);
+      }
+
+      // Returns the locked value across individual tokens of all AMMs.
+      async function getLockedValueAll(ts: number, num: number) {
+        return await dbClient.raw(`
+          SELECT d.token_${num}, SUM(t.token_${num}_locked_value)
+          FROM (
+            SELECT MAX(ts) mts, amm 
+            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+          ) r
+          JOIN data d ON
+            r.amm=d.amm
+          JOIN amm_aggregate_hour t ON
+            r.mts=t.ts AND r.amm=t.amm
+          GROUP BY d.token_${num}
+        `);
+      }
+
+      // Returns the locked value for a specific token across AMMs
+      // taking one token at a time from the pair
+      async function getLockedValue(ts: number, num: number) {
+        return await dbClient.raw(`
+          SELECT SUM(t.token_${num}_locked_value)
+          FROM (
+            SELECT MAX(ts) mts, amm 
+            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+          ) r
+          JOIN data d ON
+            r.amm=d.amm
+          JOIN amm_aggregate_hour t ON
+            r.mts=t.ts AND r.amm=t.amm
+          WHERE d.token_${num}='${req.params.token}'
         `);
       }
 
@@ -46,13 +82,23 @@ function build({ dbClient, data }: Dependecies): Router {
       const aggregate24H = convertToMap((await getAggregate(t24h, tch)).rows, "token");
       const aggregate7D = convertToMap((await getAggregate(t7d, tch)).rows, "token");
 
-      // Last aggregated data in the form of { token-symbol: { close-price, locked-value } }
-      const lastAggregate24H = convertToMap((await getLastAggregate(t24h)).rows, "token");
-      const lastAggregateCH = convertToMap((await getLastAggregate(tch)).rows, "token");
+      // Last aggregated data in the form of { token-symbol: { close-price } }
+      const lastAggregate24H = convertToMap((await getClosePriceAggregate(t24h)).rows, "token");
+      const lastAggregateCH = convertToMap((await getClosePriceAggregate(tch)).rows, "token");
 
-      // Fetch a year's worth of aggregated data if a specific token is supplied in the params
+      // Last locked values across token 1 of all AMMs in the form { token-symbol: { sum } }
+      const t1LockedValue24H = convertToMap((await getLockedValueAll(t24h, 1)).rows, "token_1");
+      const t1LockedValueCH = convertToMap((await getLockedValueAll(tch, 1)).rows, "token_1");
+
+      // Last locked values across token 2 of all AMMs in the form { token-symbol: { sum } }
+      const t2LockedValue24H = convertToMap((await getLockedValueAll(t24h, 2)).rows, "token_2");
+      const t2LockedValueCH = convertToMap((await getLockedValueAll(tch, 2)).rows, "token_2");
+
       let aggregate1Y = [];
+      const tvlHistory = [];
+
       if (req.params.token) {
+        // Fetch a year's worth of aggregated data if a specific token is supplied in the params
         const _entry = await dbClient.get({
           table: `token_aggregate_day`,
           select: `
@@ -62,12 +108,31 @@ function build({ dbClient, data }: Dependecies): Router {
             low_price l, 
             close_price c, 
             volume_value,
-            fees_value,
-            locked_value
+            fees_value
           `,
-          where: `token='${req.params.token}' AND ts>=${t1Y} AND ts<=${tch} ORDER BY ts`,
+          where: `token='${req.params.token}' AND ts>=${t1y} AND ts<=${tch} ORDER BY ts`,
         });
         aggregate1Y = _entry.rows;
+
+        const t0 = Math.floor(tc / 86400) * 86400; // Current daily rounded timestamp
+        const t365 = t0 - 365 * 86400; // Current daily - 1 year
+
+        // Fetch a year's worth of daily TVL of a specific token
+        for (let ts = t365; ts <= t0; ts += 86400) {
+          const cached = cache.get(JSON.stringify({ ts, token: req.params.token }));
+          let lockedValueTS;
+          if (!cached) {
+            const t1LockedValueTS = (await getLockedValue(ts, 1)).rows[0];
+            const t2LockedValueTS = (await getLockedValue(ts, 2)).rows[0];
+            lockedValueTS = parseFloat(t1LockedValueTS.sum ?? 0) + parseFloat(t2LockedValueTS.sum ?? 0);
+          } else {
+            lockedValueTS = cached;
+            cache.insert(JSON.stringify({ ts, token: req.params.token }), lockedValueTS, config.ttl.history);
+          }
+          if (lockedValueTS > 0) {
+            tvlHistory.push({ [ts]: lockedValueTS.toFixed(6) });
+          }
+        }
       }
 
       const tokens: TokenResponse[] = [];
@@ -78,8 +143,10 @@ function build({ dbClient, data }: Dependecies): Router {
         const priceCH = parseFloat(lastAggregateCH[token]?.close_price ?? 0);
         const price24H = parseFloat(lastAggregate24H[token]?.close_price ?? 0);
 
-        const lockedValueCH = parseFloat(lastAggregateCH[token]?.locked_value ?? 0);
-        const lockedValue24H = parseFloat(lastAggregate24H[token]?.locked_value ?? 0);
+        const lockedValueCH =
+          parseFloat(t1LockedValueCH[token]?.sum ?? 0) + parseFloat(t2LockedValueCH[token]?.sum ?? 0);
+        const lockedValue24H =
+          parseFloat(t1LockedValue24H[token]?.sum ?? 0) + parseFloat(t2LockedValue24H[token]?.sum ?? 0);
 
         const vol7D = parseFloat(aggregate7D[token]?.volume ?? 0);
         const fees7D = parseFloat(aggregate7D[token]?.fees ?? 0);
@@ -110,11 +177,6 @@ function build({ dbClient, data }: Dependecies): Router {
             [item.ts]: item.fees_value,
           };
         });
-        const tvlHistory = aggregate1Y.map((item) => {
-          return <{ [key: string]: string }>{
-            [item.ts]: item.locked_value,
-          };
-        });
 
         tokens.push({
           token,
@@ -138,10 +200,10 @@ function build({ dbClient, data }: Dependecies): Router {
             history: req.params.token ? feesHistory : undefined,
           },
           tvl: {
-            value: lockedValueCH.toString(),
+            value: lockedValueCH.toFixed(6),
             // (tvl record 24 hrs ago, last tvl record)
             change24H: percentageChange(lockedValue24H, lockedValueCH),
-            history: req.params.token ? tvlHistory : undefined,
+            history: tvlHistory,
           },
         });
       }

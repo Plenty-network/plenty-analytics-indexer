@@ -1,3 +1,4 @@
+import Cache from "./infrastructure/Cache";
 import DatabaseClient from "./infrastructure/DatabaseClient";
 
 //===============
@@ -8,6 +9,10 @@ export interface Config {
   heartbeatURL: string;
   expressPort: string;
   configURL: string;
+  ttl: {
+    data: number;
+    history: number;
+  };
   postgres: {
     username: string;
     database: string;
@@ -16,13 +21,22 @@ export interface Config {
   };
 }
 
-export interface Dependecies {
+export interface Dependencies {
+  cache: Cache;
   config: Config;
   dbClient: DatabaseClient;
-  data: {
-    amm: string[];
-    token: string[];
-  };
+  getData: () => Promise<Data>;
+}
+
+export interface CachedValue {
+  data: any;
+  storedAt: Date | undefined;
+  ttl: number | undefined;
+}
+
+export interface Data {
+  amm: string[];
+  token: string[];
 }
 
 //================
@@ -81,6 +95,24 @@ export interface PoolResponse {
     value24H: string;
     change24H: string;
     value7D: string;
+    history?: { [key: string]: string }[];
+  };
+  tvl: {
+    value: string;
+    change24H: string;
+    history?: { [key: string]: string }[];
+  };
+}
+
+export interface PlentyResponse {
+  volume: {
+    value24H: string;
+    change24H: string;
+    history?: { [key: string]: string }[];
+  };
+  fees: {
+    value24H: string;
+    change24H: string;
     history?: { [key: string]: string }[];
   };
   tvl: {

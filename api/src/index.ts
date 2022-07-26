@@ -1,5 +1,5 @@
-import { config } from "./config";
 import { Server } from "http";
+import { config } from "./config";
 import { httpServer } from "./web/Server";
 import { buildDependencies } from "./dependencies";
 
@@ -12,11 +12,14 @@ let server: Server;
 (async () => {
   try {
     heartbeat.start();
+
     const dependencies = await buildDependencies(config);
     await dependencies.dbClient.init();
+
     server = httpServer(dependencies).listen(config.expressPort, () => {
       console.log(`Express server started on port: ${config.expressPort}`);
     });
+
     process.on("SIGTERM", () => {
       console.log("Server stopping...");
       server.close(() => {
