@@ -76,7 +76,7 @@ export interface TransactionResponse {
   timestamp: string;
   opHash: string;
   account: string;
-  amm: string;
+  pool: string;
   type: TransactionType;
   token1Amount: string;
   token2Amount: string;

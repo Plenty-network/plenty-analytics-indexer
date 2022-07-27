@@ -13,6 +13,7 @@ function build({ getData, dbClient }: Dependencies): Router {
       // Check request params validity
       if (req.params.pool && !data.amm.includes(req.params.pool)) {
         res.json({ error: "Pool does not exist." });
+        return;
       }
 
       const tc = Math.floor(new Date("2022-07-22T12:34:29Z").getTime() / 1000); // Current timestamp

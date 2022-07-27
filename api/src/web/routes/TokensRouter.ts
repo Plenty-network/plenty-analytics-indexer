@@ -13,6 +13,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       // Check request params validity
       if (req.params.token && !data.token.includes(req.params.token)) {
         res.json({ error: "Token does not exist." });
+        return;
       }
 
       const tc = Math.floor(new Date().getTime() / 1000); // Current timestamp
