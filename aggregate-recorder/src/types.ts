@@ -9,7 +9,7 @@ export interface Config {
   heartbeatURL: string;
   tzktURL: string;
   configURL: string;
-  port: string;
+  blockPort: string;
   tzktLimit: number;
   tzktOffset: number;
   sharedDirectory: string;
@@ -29,8 +29,7 @@ export interface Dependecies {
 }
 
 export interface BlockData {
-  hash: string;
-  timestamp: string;
+  level: number;
 }
 
 //================

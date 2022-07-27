@@ -36,14 +36,25 @@ export default class AggregateProcessor {
   async process(lastLevel: number): Promise<void> {
     // Last level received by the block-watcher
     this._lastLevel = lastLevel;
+
+    let currentAMM = "";
+    let currentLevel = 0;
+
     try {
       for (const ammAddress of Object.keys(this._data.amm)) {
         // Fetch hashes of all operations on the amm that involve a swap
         const operationHashes = await this._getOperationHashes(ammAddress);
 
+        // Locally record current AMM being process for error logging
+        currentAMM = ammAddress;
+
         for (const hash of operationHashes) {
           // Fetch individual operations and process them
           const operation = await this._tkztProvider.getOperation(hash);
+
+          // Locally record current level being process for error logging
+          currentLevel = operation[0].level;
+
           // Record the indexed level
           await this._recordLastIndexed(this._data.amm[ammAddress], operation[0].level);
           // Handle the relevant transactions in the operation object
@@ -51,7 +62,11 @@ export default class AggregateProcessor {
         }
       }
     } catch (err) {
-      throw err;
+      throw new Error(`
+        Error: ${err.message},\n
+        Last AMM: ${currentAMM},\n
+        Last Level: ${currentLevel}\n
+      `);
     }
   }
 

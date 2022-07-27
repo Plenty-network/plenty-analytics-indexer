@@ -6,6 +6,5 @@ export interface Config {
 }
 
 export interface BlockData {
-  hash: string;
-  timestamp: string;
+  level: number;
 }

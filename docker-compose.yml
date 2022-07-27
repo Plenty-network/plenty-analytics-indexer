@@ -18,6 +18,8 @@ services:
 
   block-watcher:
     build: ./block-watcher
+    ports:
+      - "6024:6024"
 
   aggregate-recorder:
     build: ./aggregate-recorder

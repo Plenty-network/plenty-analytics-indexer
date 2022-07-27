@@ -8,5 +8,6 @@ const messenger = new Messenger(config);
 const heartBeat = new Heartbeat(config);
 const blockMonitor = new BlockMonitor(config);
 
+messenger.bind();
 heartBeat.start();
 blockMonitor.monitor(messenger);

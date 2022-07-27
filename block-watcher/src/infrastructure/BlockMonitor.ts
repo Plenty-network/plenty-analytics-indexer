@@ -25,8 +25,7 @@ export default class BlockMonitor {
         this._lastBlockHash = block.hash;
         console.log(`Found Block ${block.hash} at ${block.header.timestamp.toLocaleString()}`);
         messenger.broadcast({
-          hash: block.hash,
-          timestamp: block.header.timestamp.toString(),
+          level: block.header.level,
         });
       }
     } catch (err) {

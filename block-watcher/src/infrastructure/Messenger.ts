@@ -13,6 +13,15 @@ export default class Messenger {
     this._broadcastAddress = broadcastAddress;
   }
 
+  bind() {
+    var _this = this;
+    this._server.on("listening", function () {
+      _this._server.setBroadcast(true);
+    });
+
+    this._server.bind(parseInt(this._ports[0]));
+  }
+
   broadcast(data: BlockData) {
     const message = Buffer.from(JSON.stringify(data));
 
