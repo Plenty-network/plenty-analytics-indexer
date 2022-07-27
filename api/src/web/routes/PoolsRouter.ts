@@ -16,7 +16,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         return;
       }
 
-      const tc = Math.floor(new Date("2022-07-22T12:34:29Z").getTime() / 1000); // Current timestamp
+      const tc = Math.floor(new Date().getTime() / 1000); // Current timestamp
       const tch = Math.floor(tc / 3600) * 3600; // Current hourly rounded timestamp
       const t48h = tch - 48 * 3600; // Current hourly - 48 hours
       const t24h = tch - 24 * 3600; // Current hourly - 24 hours
