@@ -203,7 +203,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
             value: lockedValueCH.toFixed(6),
             // (tvl record 24 hrs ago, last tvl record)
             change24H: percentageChange(lockedValue24H, lockedValueCH),
-            history: tvlHistory,
+            history: req.params.token ? tvlHistory : undefined,
           },
         });
       }

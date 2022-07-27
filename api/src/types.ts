@@ -84,7 +84,7 @@ export interface TransactionResponse {
 }
 
 export interface PoolResponse {
-  amm: string;
+  pool: string;
   volume: {
     value24H: string;
     change24H: string;
