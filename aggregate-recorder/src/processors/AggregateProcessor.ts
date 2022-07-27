@@ -144,13 +144,14 @@ export default class AggregateProcessor {
 
       // Record the liquidity transaction
       await this._dbClient.insert({
-        table: `${type.toLowerCase()}`,
+        table: `transaction`,
         columns: `(
           id,
           ts,
           hash,
           amm,
           account,
+          type,
           token_1_amount,
           token_2_amount,
           value
@@ -161,6 +162,7 @@ export default class AggregateProcessor {
           '${txn.hash}',
           '${pair.address}',
           '${txn.initiator?.address ?? txn.sender?.address}',
+          '${type.toLowerCase()}',
           ${pair.token1.amount},
           ${pair.token2.amount},
           ${pair.token1.amount * token1Price + pair.token2.amount * token2Price}
@@ -236,14 +238,14 @@ export default class AggregateProcessor {
 
       // Record the swap
       await this._dbClient.insert({
-        table: "swap",
+        table: `transaction`,
         columns: `(
           id,
           ts,
           hash,
           amm,
           account,
-          is_swap_1,
+          type,
           token_1_amount,
           token_2_amount,
           value
@@ -254,7 +256,7 @@ export default class AggregateProcessor {
           '${txn.hash}',
           '${pair.address}',
           '${txn.initiator?.address ?? txn.sender?.address}',
-          ${isSwap1},   
+          '${type.toLowerCase()}',   
           ${pair.token1.amount},
           ${pair.token2.amount},
           ${isSwap1 ? pair.token1.amount * token1Price : pair.token2.amount * token2Price}

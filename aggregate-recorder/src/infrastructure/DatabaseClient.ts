@@ -19,90 +19,78 @@ export default class DatabaseClient {
     try {
       await this._dbClient.connect();
 
-      await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS swap (
-          id NUMERIC PRIMARY KEY,
-          ts NUMERIC NOT NULL,
-          hash VARCHAR NOT NULL,
-          amm VARCHAR NOT NULL,
-          account VARCHAR NOT NULL,
-          is_swap_1 BOOLEAN NOT NULL,
-          token_1_amount NUMERIC(15, 6) NOT NULL,
-          token_2_amount NUMERIC(15, 6) NOT NULL,
-          value NUMERIC(15, 6) NOT NULL
-        );`
-      );
+      await this._dbClient.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname='transaction_type') THEN
+            CREATE TYPE transaction_type AS ENUM (
+              'swap_token_1', 
+              'swap_token_2', 
+              'add_liquidity', 
+              'remove_liquidity'
+            );
+          END IF;
+        END $$;
+      `);
 
       await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS add_liquidity (
-          id NUMERIC PRIMARY KEY,
-          ts NUMERIC NOT NULL,
-          hash VARCHAR NOT NULL,
-          amm VARCHAR NOT NULL,
-          account VARCHAR NOT NULL,
-          token_1_amount NUMERIC(15, 6) NOT NULL,
-          token_2_amount NUMERIC(15, 6) NOT NULL,
-          value NUMERIC(15, 6) NOT NULL
-        );`
-      );
-
-      await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS remove_liquidity (
-          id NUMERIC PRIMARY KEY,
-          ts NUMERIC NOT NULL,
-          hash VARCHAR NOT NULL,
-          amm VARCHAR NOT NULL,
-          account VARCHAR NOT NULL,
-          token_1_amount NUMERIC(15, 6) NOT NULL,
-          token_2_amount NUMERIC(15, 6) NOT NULL,
-          value NUMERIC(15, 6) NOT NULL
+        `CREATE TABLE IF NOT EXISTS transaction (
+          id numeric PRIMARY KEY,
+          ts numeric NOT NULL,
+          hash varchar NOT NULL,
+          amm varchar NOT NULL,
+          account varchar NOT NULL,
+          type transaction_type NOT NULL,
+          token_1_amount numeric(15, 6) NOT NULL,
+          token_2_amount numeric(15, 6) NOT NULL,
+          value numeric(15, 6) NOT NULL
         );`
       );
 
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS plenty_aggregate_hour (
-          ts NUMERIC PRIMARY KEY,
-          volume_value NUMERIC(15, 6) NOT NULL,
-          fees_value NUMERIC(15, 6) NOT NULL
+          ts numeric PRIMARY KEY,
+          volume_value numeric(15, 6) NOT NULL,
+          fees_value numeric(15, 6) NOT NULL
         );`
       );
 
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS plenty_aggregate_day (
-          ts NUMERIC PRIMARY KEY,
-          volume_value NUMERIC(15, 6) NOT NULL,
-          fees_value NUMERIC(15, 6) NOT NULL
+          ts numeric PRIMARY KEY,
+          volume_value numeric(15, 6) NOT NULL,
+          fees_value numeric(15, 6) NOT NULL
         );`
       );
 
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS token_aggregate_hour (
-          ts NUMERIC NOT NULL,
-          token VARCHAR NOT NULL,
-          open_price NUMERIC(15, 6) NOT NULL,
-          high_price NUMERIC(15, 6) NOT NULL,
-          low_price NUMERIC(15, 6) NOT NULL,
-          close_price NUMERIC(15, 6) NOT NULL,
-          volume NUMERIC (15, 6) NOT NULL,
-          volume_value NUMERIC (15, 6) NOT NULL,
-          fees NUMERIC (15, 6) NOT NULL,
-          fees_value NUMERIC(15, 6) NOT NULL,
+          ts numeric NOT NULL,
+          token varchar NOT NULL,
+          open_price numeric(15, 6) NOT NULL,
+          high_price numeric(15, 6) NOT NULL,
+          low_price numeric(15, 6) NOT NULL,
+          close_price numeric(15, 6) NOT NULL,
+          volume numeric (15, 6) NOT NULL,
+          volume_value numeric (15, 6) NOT NULL,
+          fees numeric (15, 6) NOT NULL,
+          fees_value numeric(15, 6) NOT NULL,
           PRIMARY KEY (ts, token)
         );`
       );
 
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS token_aggregate_day (
-          ts NUMERIC NOT NULL,
-          token VARCHAR NOT NULL,
-          open_price NUMERIC(15, 6) NOT NULL,
-          high_price NUMERIC(15, 6) NOT NULL,
-          low_price NUMERIC(15, 6) NOT NULL,
-          close_price NUMERIC(15, 6) NOT NULL,
-          volume NUMERIC (15, 6) NOT NULL,
-          volume_value NUMERIC (15, 6) NOT NULL,
-          fees NUMERIC (15, 6) NOT NULL,
-          fees_value NUMERIC(15, 6) NOT NULL,
+          ts numeric NOT NULL,
+          token varchar NOT NULL,
+          open_price numeric(15, 6) NOT NULL,
+          high_price numeric(15, 6) NOT NULL,
+          low_price numeric(15, 6) NOT NULL,
+          close_price numeric(15, 6) NOT NULL,
+          volume numeric (15, 6) NOT NULL,
+          volume_value numeric (15, 6) NOT NULL,
+          fees numeric (15, 6) NOT NULL,
+          fees_value numeric(15, 6) NOT NULL,
           PRIMARY KEY (ts, token)
         );`
       );
@@ -110,19 +98,19 @@ export default class DatabaseClient {
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS amm_aggregate_hour (
           ts BIGINT,
-          amm VARCHAR,
-          token_1_volume NUMERIC(15, 6) NOT NULL,
-          token_1_volume_value NUMERIC(15, 6) NOT NULL,
-          token_2_volume NUMERIC(15, 6) NOT NULL,
-          token_2_volume_value NUMERIC(15, 6) NOT NULL,
-          token_1_fees NUMERIC(15, 6) NOT NULL,
-          token_1_fees_value NUMERIC(15, 6) NOT NULL,
-          token_2_fees NUMERIC(15, 6) NOT NULL,
-          token_2_fees_value NUMERIC(15, 6) NOT NULL,
-          token_1_locked NUMERIC(15, 6) NOT NULL,
-          token_1_locked_value NUMERIC(15, 6) NOT NULL,
-          token_2_locked NUMERIC(15, 6) NOT NULL,
-          token_2_locked_value NUMERIC(15, 6) NOT NULL,
+          amm varchar,
+          token_1_volume numeric(15, 6) NOT NULL,
+          token_1_volume_value numeric(15, 6) NOT NULL,
+          token_2_volume numeric(15, 6) NOT NULL,
+          token_2_volume_value numeric(15, 6) NOT NULL,
+          token_1_fees numeric(15, 6) NOT NULL,
+          token_1_fees_value numeric(15, 6) NOT NULL,
+          token_2_fees numeric(15, 6) NOT NULL,
+          token_2_fees_value numeric(15, 6) NOT NULL,
+          token_1_locked numeric(15, 6) NOT NULL,
+          token_1_locked_value numeric(15, 6) NOT NULL,
+          token_2_locked numeric(15, 6) NOT NULL,
+          token_2_locked_value numeric(15, 6) NOT NULL,
           PRIMARY KEY (ts, amm)
         );`
       );
@@ -130,35 +118,35 @@ export default class DatabaseClient {
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS amm_aggregate_day (
           ts BIGINT,
-          amm VARCHAR,
-          token_1_volume NUMERIC(15, 6) NOT NULL,
-          token_1_volume_value NUMERIC(15, 6) NOT NULL,
-          token_2_volume NUMERIC(15, 6) NOT NULL,
-          token_2_volume_value NUMERIC(15, 6) NOT NULL,
-          token_1_fees NUMERIC(15, 6) NOT NULL,
-          token_1_fees_value NUMERIC(15, 6) NOT NULL,
-          token_2_fees NUMERIC(15, 6) NOT NULL,
-          token_2_fees_value NUMERIC(15, 6) NOT NULL,
-          token_1_locked NUMERIC(15, 6) NOT NULL,
-          token_1_locked_value NUMERIC(15, 6) NOT NULL,
-          token_2_locked NUMERIC(15, 6) NOT NULL,
-          token_2_locked_value NUMERIC(15, 6) NOT NULL,
+          amm varchar,
+          token_1_volume numeric(15, 6) NOT NULL,
+          token_1_volume_value numeric(15, 6) NOT NULL,
+          token_2_volume numeric(15, 6) NOT NULL,
+          token_2_volume_value numeric(15, 6) NOT NULL,
+          token_1_fees numeric(15, 6) NOT NULL,
+          token_1_fees_value numeric(15, 6) NOT NULL,
+          token_2_fees numeric(15, 6) NOT NULL,
+          token_2_fees_value numeric(15, 6) NOT NULL,
+          token_1_locked numeric(15, 6) NOT NULL,
+          token_1_locked_value numeric(15, 6) NOT NULL,
+          token_2_locked numeric(15, 6) NOT NULL,
+          token_2_locked_value numeric(15, 6) NOT NULL,
           PRIMARY KEY (ts, amm)
         );`
       );
 
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS last_indexed (
-          amm VARCHAR PRIMARY KEY,
-          level NUMERIC
+          amm varchar PRIMARY KEY,
+          level numeric
         );`
       );
 
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS price_spot (
           ts BIGINT,
-          token VARCHAR,
-          value NUMERIC (15, 6),
+          token varchar,
+          value numeric (15, 6),
           PRIMARY KEY (ts, token)
         );`
       );
