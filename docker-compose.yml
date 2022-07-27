@@ -31,9 +31,7 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_HOST: "${POSTGRES_HOST}"
-      SHARED_DIRECTORY: "${SHARED_DIRECTORY}"
     volumes:
-      - ./data:/app/data
 
   api:
     build: ./api
@@ -47,6 +45,4 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_HOST: "${POSTGRES_HOST}"
-      SHARED_DIRECTORY: "${SHARED_DIRECTORY}"
     volumes:
-      - ./data:/app/data

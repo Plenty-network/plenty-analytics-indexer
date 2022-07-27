@@ -1,6 +1,6 @@
 # Plenty Analytics Indexer
 
-A microservices based indexer to provide analytics across Plenty's AMM. 
+A microservices based indexer to provide analytics across Plenty's AMM.
 
 ## Steps to run
 
@@ -11,8 +11,6 @@ POSTGRES_PASSWORD=123456
 POSTGRES_USER=master
 POSTGRES_DB=plenty
 POSTGRES_HOST=db
-
-SHARED_DIRECTORY=/app/data
 ```
 
 ### Run command

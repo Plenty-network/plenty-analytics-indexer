@@ -7,7 +7,6 @@ export const config: Config = {
   blockPort: process.env.BLOCK_PORT || "6024",
   tzktLimit: 1000,
   tzktOffset: 1000,
-  sharedDirectory: process.env.SHARED_DIRECTORY || "./data",
   postgres: {
     username: process.env.POSTGRES_USER || "master",
     database: process.env.POSTGRES_DB || "plenty",

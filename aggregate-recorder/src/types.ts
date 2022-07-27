@@ -12,7 +12,6 @@ export interface Config {
   blockPort: string;
   tzktLimit: number;
   tzktOffset: number;
-  sharedDirectory: string;
   postgres: {
     username: string;
     database: string;
