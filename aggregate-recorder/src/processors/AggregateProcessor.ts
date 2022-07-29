@@ -39,6 +39,7 @@ export default class AggregateProcessor {
 
     let currentAMM = "";
     let currentLevel = 0;
+    let currentOperation = "";
 
     try {
       for (const ammAddress of Object.keys(this._data.amm)) {
@@ -54,6 +55,7 @@ export default class AggregateProcessor {
 
           // Locally record current level being process for error logging
           currentLevel = operation[0].level;
+          currentOperation = operation[0].hash;
 
           // Record the indexed level
           await this._recordLastIndexed(this._data.amm[ammAddress], operation[0].level);
@@ -66,6 +68,7 @@ export default class AggregateProcessor {
         Error: ${err.message},\n
         Last AMM: ${currentAMM},\n
         Last Level: ${currentLevel}\n
+        Last opHash: ${currentOperation}\n
       `);
     }
   }
@@ -107,6 +110,15 @@ export default class AggregateProcessor {
                 price: 0,
               },
             };
+
+            // Check if the txn is already processed in the past
+            // (can happen if AMM is called multiple times in a batch)
+            const _entry = await this._dbClient.get({
+              table: "transaction",
+              select: "id",
+              where: `id=${txn.id}`,
+            });
+            if (_entry.rowCount !== 0) return;
 
             // Handle the transaction and pair based on the transaction type
             if (constants.ADD_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {

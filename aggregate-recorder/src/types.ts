@@ -70,7 +70,7 @@ export interface GetTransactionParameters {
 export interface Transaction {
   id: number;
   level: number;
-  hash: number;
+  hash: string;
   timestamp: string;
   sender: {
     address: string;
