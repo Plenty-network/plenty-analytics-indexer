@@ -1,4 +1,4 @@
-version: "3"
+version: "2.1"
 
 services:
   db:
@@ -31,7 +31,6 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_HOST: "${POSTGRES_HOST}"
-    volumes:
 
   api:
     build: ./api
@@ -45,4 +44,3 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_HOST: "${POSTGRES_HOST}"
-    volumes:

@@ -22,7 +22,14 @@ export default class DataBuilder {
 
   private async _getAmmContracts(): Promise<AmmContracts> {
     try {
-      return (await axios.get(this._configUrl + "/amm")).data;
+      return (
+        await axios.get(this._configUrl + "/amm", {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
+          },
+        })
+      ).data;
     } catch (err) {
       throw err;
     }

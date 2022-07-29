@@ -8,8 +8,22 @@ const getDataBuilder = (cache: Cache, config: Config, dbClient: DatabaseClient) 
   try {
     let data: Data | undefined = cache.get("data")?.data;
     if (!data) {
-      const amm = (await axios.get(config.configURL + "/amm")).data;
-      const token = (await axios.get(config.configURL + "/token?type=standard")).data;
+      const amm = (
+        await axios.get(config.configURL + "/amm", {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
+          },
+        })
+      ).data;
+      const token = (
+        await axios.get(config.configURL + "/token?type=standard", {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
+          },
+        })
+      ).data;
       for (const ammAddress of Object.keys(amm)) {
         const _entry = await dbClient.get({
           table: "data",
