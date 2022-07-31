@@ -710,7 +710,8 @@ export default class AggregateProcessor {
           if (
             operation[index].target.address === token.address &&
             operation[index].parameter.entrypoint === "transfer" &&
-            Array.isArray(operation[index].parameter.value)
+            Array.isArray(operation[index].parameter.value) &&
+            operation[index].parameter.value[0].txs[0].token_id === token.tokenId
           ) {
             // Return the amount of FA2 token involved in the txn
             return new BigNumber(operation[index].parameter.value[0].txs[0].amount)
