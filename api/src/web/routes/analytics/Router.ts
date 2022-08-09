@@ -4,7 +4,7 @@ import PlentyRouter from "./PlentyRouter";
 import PoolsRouter from "./PoolsRouter";
 import TransactionsRouter from "./TransactionsRouter";
 
-import { Dependencies } from "../../types";
+import { Dependencies } from "../../../types";
 
 function build(dependencies: Dependencies): Router {
   const router = Router();

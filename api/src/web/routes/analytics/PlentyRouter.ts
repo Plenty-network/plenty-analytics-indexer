@@ -1,6 +1,6 @@
 import { Request, Response, Router } from "express";
-import { Dependencies, PlentyResponse } from "../../types";
-import { percentageChange } from "../../utils";
+import { Dependencies, PlentyResponse } from "../../../types";
+import { percentageChange } from "../../../utils";
 
 function build({ cache, config, dbClient }: Dependencies): Router {
   const router = Router();

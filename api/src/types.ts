@@ -61,9 +61,9 @@ export interface DatabaseUpdateParams {
   where: string;
 }
 
-//================
-// Response types
-//================
+//==========================
+// Analytics Response types
+//==========================
 
 export enum TransactionType {
   SWAP_TOKEN_1 = "SWAP_TOKEN_1",
@@ -153,4 +153,29 @@ export interface TokenResponse {
     change24H: string;
     history?: { [key: string]: string }[];
   };
+}
+
+//===================
+// VE Response types
+//===================
+
+interface AggregateItem {
+  value: string;
+  token1: string;
+  token2: string;
+}
+
+export interface VEPoolResponse {
+  pool: string;
+  volume24H: AggregateItem;
+  volume7D: AggregateItem;
+  fees24H: AggregateItem;
+  fees7D: AggregateItem;
+  feesEpoch: AggregateItem;
+  tvl: AggregateItem;
+}
+
+export interface PriceResponse {
+  token: string;
+  price: string;
 }

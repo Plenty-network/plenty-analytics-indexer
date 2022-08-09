@@ -1,5 +1,5 @@
 import { Request, Response, Router } from "express";
-import { Dependencies, TransactionResponse } from "../../types";
+import { Dependencies, TransactionResponse } from "../../../types";
 
 function build({ getData, dbClient }: Dependencies): Router {
   const router = Router();

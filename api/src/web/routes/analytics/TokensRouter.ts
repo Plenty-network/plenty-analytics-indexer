@@ -1,6 +1,6 @@
 import { Request, Response, Router } from "express";
-import { convertToMap, percentageChange } from "../../utils";
-import { Dependencies, PriceOHLC, TokenResponse } from "../../types";
+import { convertToMap, percentageChange } from "../../../utils";
+import { Dependencies, PriceOHLC, TokenResponse } from "../../../types";
 
 function build({ cache, config, getData, dbClient }: Dependencies): Router {
   const router = Router();
