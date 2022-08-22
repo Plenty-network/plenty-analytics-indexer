@@ -55,7 +55,7 @@ export default class AggregateProcessor {
 
           // Locally record current level being process for error logging
           currentLevel = operation[0].level;
-          currentOperation = operation[0].hash;
+          currentOperation = hash;
 
           // Record the indexed level
           await this._recordLastIndexed(this._data.amm[ammAddress], operation[0].level);
@@ -331,14 +331,14 @@ export default class AggregateProcessor {
       // Possible volume and fees for token 1
       const token1Amount = txr.pair.token1.amount;
       const token1Value = token1Amount * txr.pair.token1.price;
-      const token1FeesAmount = txr.pair.type === AmmType.VOLATILE ? token1Amount / 1000 : token1Amount / 290;
-      const token1FeesValue = txr.pair.type === AmmType.VOLATILE ? token1Value / 1000 : token1Value / 290;
+      const token1FeesAmount = txr.pair.type === AmmType.STABLE ? token1Amount / 1000 : token1Amount / 290;
+      const token1FeesValue = txr.pair.type === AmmType.STABLE ? token1Value / 1000 : token1Value / 290;
 
       // Possible volume and fees for token 2
       const token2Amount = txr.pair.token2.amount;
       const token2Value = token2Amount * txr.pair.token2.price;
-      const token2FeesAmount = txr.pair.type === AmmType.VOLATILE ? token2Amount / 1000 : token2Amount / 290;
-      const token2FeesValue = txr.pair.type === AmmType.VOLATILE ? token2Value / 1000 : token2Value / 290;
+      const token2FeesAmount = txr.pair.type === AmmType.STABLE ? token2Amount / 1000 : token2Amount / 290;
+      const token2FeesValue = txr.pair.type === AmmType.STABLE ? token2Value / 1000 : token2Value / 290;
 
       const _entry = await this._dbClient.get({
         table,
@@ -467,9 +467,9 @@ export default class AggregateProcessor {
         // The total dollar value of token involved in the txn
         const tokenValue = price * tokenAmount;
 
-        // Fees calculated as 0.35% of stable trade value and 0.1% of volatile trade value
-        const feesAmount = txr.pair.type === AmmType.VOLATILE ? tokenAmount / 1000 : tokenAmount / 290;
-        const feesvalue = txr.pair.type === AmmType.VOLATILE ? tokenValue / 1000 : tokenValue / 290;
+        // Fees calculated as 0.1% of stable trade value and 0.35% of volatile trade value
+        const feesAmount = txr.pair.type === AmmType.STABLE ? tokenAmount / 1000 : tokenAmount / 290;
+        const feesvalue = txr.pair.type === AmmType.STABLE ? tokenValue / 1000 : tokenValue / 290;
 
         const _entry = await this._dbClient.get({
           table,

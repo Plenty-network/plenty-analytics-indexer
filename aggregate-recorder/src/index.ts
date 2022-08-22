@@ -8,11 +8,12 @@ import HeartBeat from "./infrastructure/Heartbeat";
 import BlockListener from "./infrastructure/BlockListener";
 import AggregateProcessor from "./processors/AggregateProcessor";
 
+const heartbeat = new HeartBeat(config);
+
 (async () => {
   try {
     addRetryToAxios();
 
-    const heartbeat = new HeartBeat(config);
     const blockListener = new BlockListener(config);
     const dependencies = await buildDependencies(config);
     const swapProcesser = new AggregateProcessor(dependencies);
@@ -29,11 +30,12 @@ import AggregateProcessor from "./processors/AggregateProcessor";
       if (processing) return;
       processing = true;
       console.log(`Processing upto block: ${b.level}`);
-      await swapProcesser.process(b.level);
+      await swapProcesser.process(b.level - config.reorgLag);
       processing = false;
     });
   } catch (err) {
     console.error(err);
+    heartbeat.stop();
     process.exit();
   }
 })();

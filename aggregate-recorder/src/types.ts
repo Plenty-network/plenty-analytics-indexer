@@ -10,6 +10,7 @@ export interface Config {
   tzktURL: string;
   configURL: string;
   blockPort: string;
+  reorgLag: number;
   tzktLimit: number;
   tzktOffset: number;
   postgres: {

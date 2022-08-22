@@ -4,6 +4,7 @@ import { Config } from "../types";
 
 export default class HeartBeat {
   private _heartbeatURL: string;
+  private _interval: any;
 
   constructor({ heartbeatURL }: Config) {
     this._heartbeatURL = heartbeatURL;
@@ -11,7 +12,11 @@ export default class HeartBeat {
 
   start(): void {
     this._pump();
-    setInterval(() => this._pump(), 60000);
+    this._interval = setInterval(() => this._pump(), 60000);
+  }
+
+  stop(): void {
+    clearInterval(this._interval);
   }
 
   private async _pump(): Promise<void> {

@@ -5,6 +5,7 @@ export const config: Config = {
   tzktURL: process.env.TZKT_URL || "https://api.tzkt.io/v1",
   configURL: process.env.CONFIG_URL || "https://config.plentydefi.com/v1/config",
   blockPort: process.env.BLOCK_PORT || "6024",
+  reorgLag: 2,
   tzktLimit: 1000,
   tzktOffset: 1000,
   postgres: {
