@@ -6,7 +6,7 @@ import DatabaseClient from "./infrastructure/DatabaseClient";
 // Fetch AMM and token data from Plenty's system wide config and caches it
 const getDataBuilder = (cache: Cache, config: Config, dbClient: DatabaseClient) => async (): Promise<Data> => {
   try {
-    let data: Data | undefined = cache.get("data")?.data;
+    let data: Data | undefined = cache.get("data");
     if (!data) {
       const amm = (
         await axios.get(config.configURL + "/amm", {
