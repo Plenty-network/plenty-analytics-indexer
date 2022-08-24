@@ -5,12 +5,16 @@ import { Dependencies, VEPoolResponse } from "../../../types";
 function build({ getData, dbClient }: Dependencies): Router {
   const router = Router();
 
-  router.get("/", async (_: Request, res: Response) => {
+  interface Query {
+    ts: number;
+  }
+
+  router.get("/", async (req: Request<{}, {}, {}, Query>, res: Response) => {
     try {
       // Fetch system wide amm and token data
       const data = await getData();
 
-      const tc = Math.floor(new Date().getTime() / 1000); // Current timestamp
+      const tc = req.query.ts || Math.floor(new Date().getTime() / 1000); // Timestamp provided or Current timestamp
       const tch = Math.floor(tc / 3600) * 3600; // Current hourly rounded timestamp
       const tEpoch = Math.floor(tc / (86400 * 7)) * (86400 * 7); // Current epoch rounded timestamp
       const t24h = tch - 24 * 3600; // Current hourly - 24 hours
