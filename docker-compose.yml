@@ -20,6 +20,8 @@ services:
     build: ./block-watcher
     ports:
       - "6024:6024"
+    environment:
+      TEZOS_RPC_URL: "${TEZOS_RPC_URL}"
 
   aggregate-recorder:
     build: ./aggregate-recorder
@@ -31,6 +33,7 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_HOST: "${POSTGRES_HOST}"
+      NETWORK: "${NETWORK}"
 
   api:
     build: ./api
@@ -44,3 +47,4 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_HOST: "${POSTGRES_HOST}"
+      NETWORK: "${NETWORK}"
