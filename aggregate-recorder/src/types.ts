@@ -6,6 +6,7 @@ import TzktProvider from "./infrastructure/TzktProvider";
 //===============
 
 export interface Config {
+  network: string;
   heartbeatURL: string;
   tzktURL: string;
   configURL: string;

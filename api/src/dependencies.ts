@@ -9,7 +9,7 @@ const getDataBuilder = (cache: Cache, config: Config, dbClient: DatabaseClient) 
     let data: Data | undefined = cache.get("data");
     if (!data) {
       const amm = (
-        await axios.get(config.configURL + "/amm", {
+        await axios.get(config.configURL + "/amm" + `?network=${config.network}`, {
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
@@ -17,7 +17,7 @@ const getDataBuilder = (cache: Cache, config: Config, dbClient: DatabaseClient) 
         })
       ).data;
       const token = (
-        await axios.get(config.configURL + "/token?type=standard", {
+        await axios.get(config.configURL + "/token?type=standard" + `&network=${config.network}`, {
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",

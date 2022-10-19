@@ -6,6 +6,7 @@ import DatabaseClient from "./infrastructure/DatabaseClient";
 //===============
 
 export interface Config {
+  network: string;
   heartbeatURL: string;
   expressPort: string;
   configURL: string;

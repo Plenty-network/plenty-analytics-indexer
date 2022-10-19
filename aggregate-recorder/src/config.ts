@@ -1,9 +1,10 @@
 import { Config } from "./types";
 
 export const config: Config = {
+  network: process.env.NETWORK || "mainnet",
   heartbeatURL: process.env.HEARTBEAT || "https://cronitor.link/p/f2b147ded5de476180d0eac01c1502f6/EADGAa",
   tzktURL: process.env.TZKT_URL || "https://api.tzkt.io/v1",
-  configURL: process.env.CONFIG_URL || "https://config.plentydefi.com/v1/config",
+  configURL: process.env.CONFIG_URL || "https://config.plenty.network/v1/config",
   blockPort: process.env.BLOCK_PORT || "6024",
   reorgLag: 2,
   tzktLimit: 1000,

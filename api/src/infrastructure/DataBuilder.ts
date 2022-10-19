@@ -4,9 +4,11 @@ import { Config } from "../types";
 
 export default class DataBuilder {
   private _configUrl: string;
+  private _network: string;
 
-  constructor({ configURL }: Config) {
+  constructor({ configURL, network }: Config) {
     this._configUrl = configURL;
+    this._network = network;
   }
 
   async buildData(): Promise<{ amm: string[]; token: string[] }> {
@@ -24,7 +26,7 @@ export default class DataBuilder {
 
   private async _getAmmContracts(): Promise<string[]> {
     try {
-      const res = await axios.get(this._configUrl + "/amm");
+      const res = await axios.get(this._configUrl + "/amm" + `?network=${this._network}`);
       return Object.keys(res.data);
     } catch (err) {
       throw err;
@@ -33,7 +35,7 @@ export default class DataBuilder {
 
   private async _getTokens(): Promise<string[]> {
     try {
-      const res = await axios.get(this._configUrl + "/token?type=standard");
+      const res = await axios.get(this._configUrl + "/token?type=standard" + `&network=${this._network}`);
       return Object.keys(res.data);
     } catch (err) {
       throw err;
