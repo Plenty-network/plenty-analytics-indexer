@@ -180,3 +180,43 @@ export interface PriceResponse {
   token: string;
   price: string;
 }
+
+//========================
+// Tracker Response types
+//========================
+
+export interface TokenTrackerResponse {
+  name: string;
+  symbol: string;
+  contract?: string;
+  price: {
+    value: string;
+    change24H: string;
+    history?: { [key: string]: PriceOHLC }[];
+  };
+  volume: {
+    value24H: string;
+    change24H: string;
+  };
+  tvl: {
+    value: string;
+    change24H: string;
+  };
+  pairs: {
+    symbol: string;
+    contract: string;
+    exchangeLink: string;
+    price: {
+      value: string;
+      change24H: string;
+    };
+    volume: {
+      value24H: string;
+      change24H: string;
+    };
+    tvl: {
+      value: string;
+      change24H: string;
+    };
+  }[];
+}

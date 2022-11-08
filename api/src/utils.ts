@@ -15,3 +15,13 @@ export const percentageChange = (open: number, close: number): string => {
     return (((close - open) / open) * 100).toFixed(2);
   }
 };
+
+export const aggregateBykey = (arr: any[], key: string): any => {
+  let res: { [key: string]: any[] } = {};
+  for (const item of arr) {
+    let k = `${item[`${key}`]}`;
+    if (!res[k]) res[k] = [];
+    res[k].push(item);
+  }
+  return res;
+};
