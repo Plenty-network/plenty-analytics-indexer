@@ -1,42 +1,41 @@
 import axios from "axios";
 
-import { Config } from "../types";
+import { Config, Data, Token } from "../types";
+import { convertToMap } from "../utils";
 
 export default class DataBuilder {
   private _configUrl: string;
-  private _network: string;
 
-  constructor({ configURL, network }: Config) {
+  constructor({ configURL }: Config) {
     this._configUrl = configURL;
-    this._network = network;
   }
 
-  async buildData(): Promise<{ amm: string[]; token: string[] }> {
+  async buildData(): Promise<Data> {
     try {
-      const ammList = await this._getAmmContracts();
-      const tokenList = await this._getTokens();
+      const pools = await this._getPools();
+      const tokens = await this._getTokens();
       return {
-        amm: ammList,
-        token: tokenList,
+        pools,
+        tokens: convertToMap(tokens, "symbol"),
       };
     } catch (err) {
       throw err;
     }
   }
 
-  private async _getAmmContracts(): Promise<string[]> {
+  private async _getPools(): Promise<string[]> {
     try {
-      const res = await axios.get(this._configUrl + "/amm" + `?network=${this._network}`);
+      const res = await axios.get(this._configUrl + "/pools");
       return Object.keys(res.data);
     } catch (err) {
       throw err;
     }
   }
 
-  private async _getTokens(): Promise<string[]> {
+  private async _getTokens(): Promise<Token[]> {
     try {
-      const res = await axios.get(this._configUrl + "/token?type=standard" + `&network=${this._network}`);
-      return Object.keys(res.data);
+      const res = await axios.get(this._configUrl + "/tokens");
+      return res.data;
     } catch (err) {
       throw err;
     }

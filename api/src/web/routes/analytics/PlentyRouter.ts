@@ -22,29 +22,29 @@ function build({ cache, config, dbClient }: Dependencies): Router {
         });
       }
 
-      // Fetch locked value acrosss all AMMs for both tokens by the hour
+      // Fetch locked value acrosss all pools for both tokens by the hour
       async function getLockedValueHour(ts: number, num: number) {
         return await dbClient.raw(`
           SELECT SUM(t.token_${num}_locked_value)
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
           ) r
-          JOIN amm_aggregate_hour t ON
-            t.amm=r.amm AND t.ts=r.mts;
+          JOIN pool_aggregate_hour t ON
+            t.pool=r.pool AND t.ts=r.mts;
         `);
       }
 
-      // Fetch locked value acrosss all AMMs for both tokens by the day
+      // Fetch locked value acrosss all pools for both tokens by the day
       async function getLockedValueDay(ts: number, num: number) {
         return await dbClient.raw(`
           SELECT SUM(t.token_${num}_locked_value)
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_day WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_day WHERE ts<=${ts} GROUP BY pool
           ) r
-          JOIN amm_aggregate_day t ON
-            t.amm=r.amm AND t.ts=r.mts;
+          JOIN pool_aggregate_day t ON
+            t.pool=r.pool AND t.ts=r.mts;
         `);
       }
 
@@ -64,7 +64,7 @@ function build({ cache, config, dbClient }: Dependencies): Router {
       });
       aggregate1Y = _entry.rows;
 
-      // Get locked value across all AMMs for both tokens at current hour and 24 hours ago
+      // Get locked value across all pools for both tokens at current hour and 24 hours ago
       const t1LockedValue24H = parseFloat((await getLockedValueHour(t24h, 1)).rows[0].sum ?? 0);
       const t2LockedValue24H = parseFloat((await getLockedValueHour(t24h, 2)).rows[0].sum ?? 0);
 

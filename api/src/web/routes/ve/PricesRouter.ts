@@ -7,7 +7,7 @@ function build({ getData, dbClient }: Dependencies): Router {
 
   router.get("/", async (_: Request, res: Response) => {
     try {
-      // Fetch system wide amm and token data
+      // Fetch system wide pools and tokens data
       const data = await getData();
 
       const tc = Math.floor(new Date().getTime() / 1000); // Current timestamp
@@ -32,7 +32,7 @@ function build({ getData, dbClient }: Dependencies): Router {
       const tokens: PriceResponse[] = [];
 
       // Loop through every token in the system
-      for (const token of data.token) {
+      for (const token of Object.keys(data.tokens)) {
         // Retrieve data fields from DB entry
         const priceCH = parseFloat(lastAggregateCH[token]?.close_price ?? 0);
 

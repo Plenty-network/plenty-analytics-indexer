@@ -7,11 +7,11 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
 
   router.get("/:token?", async (req: Request<{ token: string | undefined }>, res: Response) => {
     try {
-      // Fetch system wide amm and token data
+      // Fetch system wide pool and token data
       const data = await getData();
 
       // Check request params validity
-      if (req.params.token && !data.token.includes(req.params.token)) {
+      if (req.params.token && !data.tokens[req.params.token]) {
         res.json({ error: "Token does not exist." });
         return;
       }
@@ -32,16 +32,16 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         });
       }
 
-      // Fetch aggregated amm records between two timestamps
+      // Fetch aggregated pool records between two timestamps
       async function getPoolAggregate(ts1: number, ts2: number) {
         return await dbClient.get({
-          table: `amm_aggregate_hour`,
+          table: `pool_aggregate_hour`,
           select: `
-            amm, 
+            pool, 
             SUM(token_1_volume_value) as t1volume,
             SUM(token_2_volume_value) as t2volume
           `,
-          where: `ts>=${ts1} AND ts<${ts2} GROUP BY amm`,
+          where: `ts>=${ts1} AND ts<${ts2} GROUP BY pool`,
         });
       }
 
@@ -58,69 +58,69 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         `);
       }
 
-      // Returns the locked value across individual tokens of all AMMs.
+      // Returns the locked value across individual tokens of all pools.
       async function getLockedValueAll(ts: number, num: number) {
         return await dbClient.raw(`
           SELECT d.token_${num}, SUM(t.token_${num}_locked_value)
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
           ) r
           JOIN data d ON
-            r.amm=d.amm
-          JOIN amm_aggregate_hour t ON
-            r.mts=t.ts AND r.amm=t.amm
+            r.pool=d.pool
+          JOIN pool_aggregate_hour t ON
+            r.mts=t.ts AND r.pool=t.pool
           GROUP BY d.token_${num}
         `);
       }
 
-      // Returns the locked value for a specific token across AMMs
+      // Returns the locked value for a specific token across pools
       // taking one token at a time from the pair
       async function getLockedValue(ts: number, num: number) {
         return await dbClient.raw(`
           SELECT SUM(t.token_${num}_locked_value)
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
           ) r
           JOIN data d ON
-            r.amm=d.amm
-          JOIN amm_aggregate_hour t ON
-            r.mts=t.ts AND r.amm=t.amm
+            r.pool=d.pool
+          JOIN pool_aggregate_hour t ON
+            r.mts=t.ts AND r.pool=t.pool
           WHERE d.token_${num}='${req.params.token}'
         `);
       }
 
-      // Fetch AMM locked value (<=) to supplied timestamp
+      // Fetch pool locked value (<=) to supplied timestamp
       async function getPoolLockedValueAll(ts: number) {
         return await dbClient.raw(`
-          SELECT t.amm, t.token_1_locked_value l1, t.token_2_locked_value l2
+          SELECT t.pool, t.token_1_locked_value l1, t.token_2_locked_value l2
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
           ) r
-          JOIN amm_aggregate_hour t ON
-            t.amm=r.amm AND t.ts=r.mts;
+          JOIN pool_aggregate_hour t ON
+            t.pool=r.pool AND t.ts=r.mts;
         `);
       }
 
       async function getPairWisePrice(ts: number) {
         return await dbClient.raw(`
           SELECT 
-            t.amm, 
+            t.pool, 
             d.token_1, 
             d.token_2, 
             t.token_1_amount t1amount, 
             t.token_2_amount t2amount,
             t.value
           FROM (
-            SELECT MAX(ts) mts, amm
-            FROM transaction WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool
+            FROM transaction WHERE ts<=${ts} GROUP BY pool
           ) r
           JOIN transaction t ON 
-            r.amm=t.amm AND r.mts=t.ts
+            r.pool=t.pool AND r.mts=t.ts
           JOIN data d ON
-            d.amm=t.amm
+            d.pool=t.pool
         `);
       }
 
@@ -132,32 +132,32 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       const lastAggregate24H = convertToMap((await getClosePriceAggregate(t24h)).rows, "token");
       const lastAggregateCH = convertToMap((await getClosePriceAggregate(tch)).rows, "token");
 
-      // Last locked values across token 1 of all AMMs in the form { token-symbol: { sum } }
+      // Last locked values across token 1 of all pools in the form { token-symbol: { sum } }
       const t1LockedValue24H = convertToMap((await getLockedValueAll(t24h, 1)).rows, "token_1");
       const t1LockedValueCH = convertToMap((await getLockedValueAll(tch, 1)).rows, "token_1");
 
-      // Last locked values across token 2 of all AMMs in the form { token-symbol: { sum } }
+      // Last locked values across token 2 of all pools in the form { token-symbol: { sum } }
       const t2LockedValue24H = convertToMap((await getLockedValueAll(t24h, 2)).rows, "token_2");
       const t2LockedValueCH = convertToMap((await getLockedValueAll(tch, 2)).rows, "token_2");
 
       const pairWise24H = (await getPairWisePrice(t24h)).rows;
       const pairWiseCH = (await getPairWisePrice(tch)).rows;
 
-      // Pair wise pricing data across token 1 of all AMMs
+      // Pair wise pricing data across token 1 of all pools
       const t1PairWise24H = aggregateBykey(pairWise24H, "token_1");
       const t1PairWiseCH = aggregateBykey(pairWiseCH, "token_1");
 
-      // Pair wise pricing data across token 2 of all AMMs
+      // Pair wise pricing data across token 2 of all pools
       const t2PairWise24H = aggregateBykey(pairWise24H, "token_2");
       const t2PairWiseCH = aggregateBykey(pairWiseCH, "token_2");
 
-      // Aggregated data in the form of { amm-address: { t1volume, t2volume } }
-      const poolAggregate48H = convertToMap((await getPoolAggregate(t48h, t24h)).rows, "amm");
-      const poolAggregate24H = convertToMap((await getPoolAggregate(t24h, tch)).rows, "amm");
+      // Aggregated data in the form of { pool-address: { t1volume, t2volume } }
+      const poolAggregate48H = convertToMap((await getPoolAggregate(t48h, t24h)).rows, "pool");
+      const poolAggregate24H = convertToMap((await getPoolAggregate(t24h, tch)).rows, "pool");
 
-      // Last last locked value across all AMMs
-      const poolLastLockedValue24H = convertToMap((await getPoolLockedValueAll(t24h)).rows, "amm");
-      const poolLastLockedValueCH = convertToMap((await getPoolLockedValueAll(tch)).rows, "amm");
+      // Last last locked value across all pools
+      const poolLastLockedValue24H = convertToMap((await getPoolLockedValueAll(t24h)).rows, "pool");
+      const poolLastLockedValueCH = convertToMap((await getPoolLockedValueAll(tch)).rows, "pool");
 
       let aggregate1Y = [];
       const tvlHistory = [];
@@ -202,7 +202,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       const tokens: TokenTrackerResponse[] = [];
 
       // Loop through every token in the system
-      for (const token of req.params.token ? [req.params.token] : data.token) {
+      for (const token of req.params.token ? [req.params.token] : Object.keys(data.tokens)) {
         // Retrieve data fields from DB entry
         const priceCH = parseFloat(lastAggregateCH[token]?.close_price ?? 0);
         const price24H = parseFloat(lastAggregate24H[token]?.close_price ?? 0);
@@ -228,22 +228,22 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
 
         let pairs: any = [];
 
-        const totalPairWise24H = convertToMap((t1PairWise24H[token] ?? []).concat(t2PairWise24H[token] ?? []), "amm");
-        const totalPairWiseCH = convertToMap((t1PairWiseCH[token] ?? []).concat(t2PairWiseCH[token] ?? []), "amm");
+        const totalPairWise24H = convertToMap((t1PairWise24H[token] ?? []).concat(t2PairWise24H[token] ?? []), "pool");
+        const totalPairWiseCH = convertToMap((t1PairWiseCH[token] ?? []).concat(t2PairWiseCH[token] ?? []), "pool");
 
-        for (const amm of Object.keys(totalPairWise24H)) {
-          const tpCH = totalPairWiseCH[amm];
-          const tp24H = totalPairWise24H[amm];
+        for (const pool of Object.keys(totalPairWise24H)) {
+          const tpCH = totalPairWiseCH[pool];
+          const tp24H = totalPairWise24H[pool];
 
           const poolVol48H =
-            parseFloat(poolAggregate48H[amm]?.t1volume ?? 0) + parseFloat(poolAggregate48H[amm]?.t2volume ?? 0);
+            parseFloat(poolAggregate48H[pool]?.t1volume ?? 0) + parseFloat(poolAggregate48H[pool]?.t2volume ?? 0);
           const poolVol24H =
-            parseFloat(poolAggregate24H[amm]?.t1volume ?? 0) + parseFloat(poolAggregate24H[amm]?.t2volume ?? 0);
+            parseFloat(poolAggregate24H[pool]?.t1volume ?? 0) + parseFloat(poolAggregate24H[pool]?.t2volume ?? 0);
 
           const poolLockedValueCH =
-            parseFloat(poolLastLockedValueCH[amm]?.l1 ?? 0) + parseFloat(poolLastLockedValueCH[amm]?.l2 ?? 0);
+            parseFloat(poolLastLockedValueCH[pool]?.l1 ?? 0) + parseFloat(poolLastLockedValueCH[pool]?.l2 ?? 0);
           const poolLockedValue24H =
-            parseFloat(poolLastLockedValue24H[amm]?.l1 ?? 0) + parseFloat(poolLastLockedValue24H[amm]?.l2 ?? 0);
+            parseFloat(poolLastLockedValue24H[pool]?.l1 ?? 0) + parseFloat(poolLastLockedValue24H[pool]?.l2 ?? 0);
 
           const priceInPairCH =
             parseFloat(tpCH.value) / parseFloat(tpCH[token === tpCH.token_1 ? "t1amount" : "t2amount"]);
@@ -251,9 +251,9 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
             parseFloat(tp24H.value) / parseFloat(tp24H[token === tp24H.token_1 ? "t1amount" : "t2amount"]);
 
           pairs.push({
-            symbol: `${totalPairWise24H[amm].token_1}/${totalPairWise24H[amm].token_2}`,
-            contract: amm,
-            exchangeLink: `https://plentydefi.com/swap?from=${totalPairWise24H[amm].token_1}&to=${totalPairWise24H[amm].token_2}`,
+            symbol: `${totalPairWise24H[pool].token_1}/${totalPairWise24H[pool].token_2}`,
+            contract: pool,
+            exchangeLink: `https://plentydefi.com/swap?from=${totalPairWise24H[pool].token_1}&to=${totalPairWise24H[pool].token_2}`,
             price: {
               value: priceInPairCH.toFixed(6),
               change24H: percentageChange(priceInPair24H, priceInPairCH),
@@ -270,9 +270,9 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         }
 
         tokens.push({
-          name: token,
+          name: data.tokens[token].name,
           symbol: token,
-          contract: "<contract-address>",
+          contract: data.tokens[token].address,
           price: {
             value: priceCH.toString(),
             change24H: percentageChange(price24H, priceCH), // (closing price 24 hrs ago, last closing price)

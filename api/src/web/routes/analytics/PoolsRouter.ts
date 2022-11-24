@@ -7,11 +7,11 @@ function build({ getData, dbClient }: Dependencies): Router {
 
   router.get("/:pool?", async (req: Request<{ pool: string | undefined }>, res: Response) => {
     try {
-      // Fetch system wide amm and token data
+      // Fetch system wide pool and token data
       const data = await getData();
 
       // Check request params validity
-      if (req.params.pool && !data.amm.includes(req.params.pool)) {
+      if (req.params.pool && !data.pools.includes(req.params.pool)) {
         res.json({ error: "Pool does not exist." });
         return;
       }
@@ -23,48 +23,48 @@ function build({ getData, dbClient }: Dependencies): Router {
       const t7d = tch - 7 * 86400; // Current hourly - 7 days
       const t1y = tch - 365 * 86400; // Current hourly - 1 year
 
-      // Fetch aggregated amm records between two timestamps
+      // Fetch aggregated pool records between two timestamps
       async function getAggregate(ts1: number, ts2: number) {
         return await dbClient.get({
-          table: `amm_aggregate_hour`,
+          table: `pool_aggregate_hour`,
           select: `
-            amm, 
+            pool, 
             SUM(token_1_volume_value) as t1volume,
             SUM(token_2_volume_value) as t2volume,
             SUM(token_1_fees_value) as t1fees,
             SUM(token_2_fees_value) as t2fees
           `,
-          where: `ts>=${ts1} AND ts<${ts2} GROUP BY amm`,
+          where: `ts>=${ts1} AND ts<${ts2} GROUP BY pool`,
         });
       }
 
-      // Fetch AMM locked value (<=) to supplied timestamp
+      // Fetch pool locked value (<=) to supplied timestamp
       async function getLockedValueAll(ts: number) {
         return await dbClient.raw(`
-          SELECT t.amm, t.token_1_locked_value l1, t.token_2_locked_value l2
+          SELECT t.pool, t.token_1_locked_value l1, t.token_2_locked_value l2
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
           ) r
-          JOIN amm_aggregate_hour t ON
-            t.amm=r.amm AND t.ts=r.mts;
+          JOIN pool_aggregate_hour t ON
+            t.pool=r.pool AND t.ts=r.mts;
         `);
       }
 
-      // Aggregated data in the form of { amm-address: { t1volume, t2volume, t1fees, t2fees } }
-      const aggregate48H = convertToMap((await getAggregate(t48h, t24h)).rows, "amm");
-      const aggregate24H = convertToMap((await getAggregate(t24h, tch)).rows, "amm");
-      const aggregate7D = convertToMap((await getAggregate(t7d, tch)).rows, "amm");
+      // Aggregated data in the form of { pool-address: { t1volume, t2volume, t1fees, t2fees } }
+      const aggregate48H = convertToMap((await getAggregate(t48h, t24h)).rows, "pool");
+      const aggregate24H = convertToMap((await getAggregate(t24h, tch)).rows, "pool");
+      const aggregate7D = convertToMap((await getAggregate(t7d, tch)).rows, "pool");
 
-      // Last last locked value across all AMMs
-      const lastLockedValue24H = convertToMap((await getLockedValueAll(t24h)).rows, "amm");
-      const lastLockedValueCH = convertToMap((await getLockedValueAll(tch)).rows, "amm");
+      // Last last locked value across all pools
+      const lastLockedValue24H = convertToMap((await getLockedValueAll(t24h)).rows, "pool");
+      const lastLockedValueCH = convertToMap((await getLockedValueAll(tch)).rows, "pool");
 
       let aggregate1Y = [];
       if (req.params.pool) {
         // Fetch a year's worth of aggregated data if a specific pool is supplied in the params
         const _entry = await dbClient.get({
-          table: `amm_aggregate_day`,
+          table: `pool_aggregate_day`,
           select: `
             ts,
             token_1_volume_value t1volume,
@@ -74,28 +74,29 @@ function build({ getData, dbClient }: Dependencies): Router {
             token_1_locked_value t1locked,
             token_2_locked_value t2locked
           `,
-          where: `amm='${req.params.pool}' AND ts>=${t1y} AND ts<=${tch} ORDER BY ts`,
+          where: `pool='${req.params.pool}' AND ts>=${t1y} AND ts<=${tch} ORDER BY ts`,
         });
         aggregate1Y = _entry.rows;
       }
 
       const pools: PoolResponse[] = [];
 
-      // Loop through every pool/amm in the system
-      for (const amm of req.params.pool ? [req.params.pool] : data.amm) {
+      // Loop through every pool/pool in the system
+      for (const pool of req.params.pool ? [req.params.pool] : data.pools) {
         // Retrieve data fields from DB entry
-        const lockedValueCH = parseFloat(lastLockedValueCH[amm]?.l1 ?? 0) + parseFloat(lastLockedValueCH[amm]?.l2 ?? 0);
+        const lockedValueCH =
+          parseFloat(lastLockedValueCH[pool]?.l1 ?? 0) + parseFloat(lastLockedValueCH[pool]?.l2 ?? 0);
         const lockedValue24H =
-          parseFloat(lastLockedValue24H[amm]?.l1 ?? 0) + parseFloat(lastLockedValue24H[amm]?.l2 ?? 0);
+          parseFloat(lastLockedValue24H[pool]?.l1 ?? 0) + parseFloat(lastLockedValue24H[pool]?.l2 ?? 0);
 
-        const vol7D = parseFloat(aggregate7D[amm]?.t1volume ?? 0) + parseFloat(aggregate7D[amm]?.t2volume ?? 0);
-        const fees7D = parseFloat(aggregate7D[amm]?.t1fees ?? 0) + parseFloat(aggregate7D[amm]?.t2fees ?? 0);
+        const vol7D = parseFloat(aggregate7D[pool]?.t1volume ?? 0) + parseFloat(aggregate7D[pool]?.t2volume ?? 0);
+        const fees7D = parseFloat(aggregate7D[pool]?.t1fees ?? 0) + parseFloat(aggregate7D[pool]?.t2fees ?? 0);
 
-        const vol48H = parseFloat(aggregate48H[amm]?.t1volume ?? 0) + parseFloat(aggregate48H[amm]?.t2volume ?? 0);
-        const vol24H = parseFloat(aggregate24H[amm]?.t1volume ?? 0) + parseFloat(aggregate24H[amm]?.t2volume ?? 0);
+        const vol48H = parseFloat(aggregate48H[pool]?.t1volume ?? 0) + parseFloat(aggregate48H[pool]?.t2volume ?? 0);
+        const vol24H = parseFloat(aggregate24H[pool]?.t1volume ?? 0) + parseFloat(aggregate24H[pool]?.t2volume ?? 0);
 
-        const fees48H = parseFloat(aggregate48H[amm]?.t1fees ?? 0) + parseFloat(aggregate48H[amm]?.t2fees ?? 0);
-        const fees24H = parseFloat(aggregate24H[amm]?.t1fees ?? 0) + parseFloat(aggregate24H[amm]?.t2fees ?? 0);
+        const fees48H = parseFloat(aggregate48H[pool]?.t1fees ?? 0) + parseFloat(aggregate48H[pool]?.t2fees ?? 0);
+        const fees24H = parseFloat(aggregate24H[pool]?.t1fees ?? 0) + parseFloat(aggregate24H[pool]?.t2fees ?? 0);
 
         const volumeHistory = aggregate1Y.map((item) => {
           return <{ [key: string]: string }>{
@@ -114,7 +115,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         });
 
         pools.push({
-          pool: amm,
+          pool,
           volume: {
             value24H: vol24H.toFixed(6),
             // (aggregated volume 48 hrs -> 24 hrs ago, aggregated volume 24 hrs -> now)

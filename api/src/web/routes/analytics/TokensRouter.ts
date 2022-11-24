@@ -7,11 +7,11 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
 
   router.get("/:token?", async (req: Request<{ token: string | undefined }>, res: Response) => {
     try {
-      // Fetch system wide amm and token data
+      // Fetch system wide pool and token data
       const data = await getData();
 
       // Check request params validity
-      if (req.params.token && !data.token.includes(req.params.token)) {
+      if (req.params.token && !data.tokens[req.params.token]) {
         res.json({ error: "Token does not exist." });
         return;
       }
@@ -45,35 +45,35 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         `);
       }
 
-      // Returns the locked value across individual tokens of all AMMs.
+      // Returns the locked value across individual tokens of all pool.
       async function getLockedValueAll(ts: number, num: number) {
         return await dbClient.raw(`
           SELECT d.token_${num}, SUM(t.token_${num}_locked_value)
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
           ) r
           JOIN data d ON
-            r.amm=d.amm
-          JOIN amm_aggregate_hour t ON
-            r.mts=t.ts AND r.amm=t.amm
+            r.pool=d.pool
+          JOIN pool_aggregate_hour t ON
+            r.mts=t.ts AND r.pool=t.pool
           GROUP BY d.token_${num}
         `);
       }
 
-      // Returns the locked value for a specific token across AMMs
+      // Returns the locked value for a specific token across pools
       // taking one token at a time from the pair
       async function getLockedValue(ts: number, num: number) {
         return await dbClient.raw(`
           SELECT SUM(t.token_${num}_locked_value)
           FROM (
-            SELECT MAX(ts) mts, amm 
-            FROM amm_aggregate_hour WHERE ts<=${ts} GROUP BY amm
+            SELECT MAX(ts) mts, pool 
+            FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
           ) r
           JOIN data d ON
-            r.amm=d.amm
-          JOIN amm_aggregate_hour t ON
-            r.mts=t.ts AND r.amm=t.amm
+            r.pool=d.pool
+          JOIN pool_aggregate_hour t ON
+            r.mts=t.ts AND r.pool=t.pool
           WHERE d.token_${num}='${req.params.token}'
         `);
       }
@@ -87,11 +87,11 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       const lastAggregate24H = convertToMap((await getClosePriceAggregate(t24h)).rows, "token");
       const lastAggregateCH = convertToMap((await getClosePriceAggregate(tch)).rows, "token");
 
-      // Last locked values across token 1 of all AMMs in the form { token-symbol: { sum } }
+      // Last locked values across token 1 of all pools in the form { token-symbol: { sum } }
       const t1LockedValue24H = convertToMap((await getLockedValueAll(t24h, 1)).rows, "token_1");
       const t1LockedValueCH = convertToMap((await getLockedValueAll(tch, 1)).rows, "token_1");
 
-      // Last locked values across token 2 of all AMMs in the form { token-symbol: { sum } }
+      // Last locked values across token 2 of all pools in the form { token-symbol: { sum } }
       const t2LockedValue24H = convertToMap((await getLockedValueAll(t24h, 2)).rows, "token_2");
       const t2LockedValueCH = convertToMap((await getLockedValueAll(tch, 2)).rows, "token_2");
 
@@ -139,7 +139,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       const tokens: TokenResponse[] = [];
 
       // Loop through every token in the system
-      for (const token of req.params.token ? [req.params.token] : data.token) {
+      for (const token of req.params.token ? [req.params.token] : Object.keys(data.tokens)) {
         // Retrieve data fields from DB entry
         const priceCH = parseFloat(lastAggregateCH[token]?.close_price ?? 0);
         const price24H = parseFloat(lastAggregate24H[token]?.close_price ?? 0);

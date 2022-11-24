@@ -6,7 +6,6 @@ import DatabaseClient from "./infrastructure/DatabaseClient";
 //===============
 
 export interface Config {
-  network: string;
   heartbeatURL: string;
   expressPort: string;
   configURL: string;
@@ -35,9 +34,17 @@ export interface CachedValue {
   ttl: number | undefined;
 }
 
+export interface Token {
+  name: string;
+  symbol: string;
+  address: string;
+}
+
 export interface Data {
-  amm: string[];
-  token: string[];
+  pools: string[];
+  tokens: {
+    [key: string]: Token;
+  };
 }
 
 //================

@@ -11,13 +11,13 @@ function build({ getData, dbClient }: Dependencies): Router {
 
   router.get("/", async (req: Request<{}, {}, {}, Query>, res: Response) => {
     try {
-      // Get system wide amm and tokens data
+      // Get system wide pools and tokens data
       const data = await getData();
 
       let transactions: TransactionResponse[];
 
       if (req.query.pool) {
-        if (!data.amm.includes(req.query.pool)) {
+        if (!data.pools.includes(req.query.pool)) {
           res.json({ error: "Pool does not exist." });
           return;
         }
@@ -26,20 +26,20 @@ function build({ getData, dbClient }: Dependencies): Router {
           SELECT
             ts timestamp,
             hash opHash,
-            amm pool,
+            pool,
             account,
             type,
             token_1_amount token1Amount,
             token_2_amount token2Amount,
             value
           FROM transaction
-          WHERE amm='${req.query.pool}'
+          WHERE pool='${req.query.pool}'
           ORDER BY ts
           LIMIT 100;
         `);
         transactions = _entry.rows;
       } else if (req.query.token) {
-        if (!data.token.includes(req.query.token)) {
+        if (!data.tokens[req.query.token]) {
           res.json({ error: "Token does not exist." });
           return;
         }
@@ -49,14 +49,14 @@ function build({ getData, dbClient }: Dependencies): Router {
           SELECT
             t.ts timestamp,
             t.hash opHash,
-            t.amm pool,
+            t.pool,
             t.account,
             t.type,
             t.token_1_amount token1Amount,
             t.token_2_amount token2Amount,
             t.value
           FROM transaction t
-          JOIN data d ON t.amm=d.amm
+          JOIN data d ON t.pool=d.pool
           WHERE d.token_1='${req.query.token}' OR d.token_2='${req.query.token}'
           ORDER BY ts
           LIMIT 100;
@@ -69,7 +69,7 @@ function build({ getData, dbClient }: Dependencies): Router {
           SELECT 
             ts timestamp,
             hash opHash,
-            amm pool,
+            pool,
             account,
             type,
             token_1_amount token1Amount,

@@ -1,7 +1,6 @@
 import { Config } from "./types";
 
 export const config: Config = {
-  network: process.env.NETWORK || "mainnet",
   heartbeatURL: process.env.HEARTBEAT || "https://cronitor.link/p/f2b147ded5de476180d0eac01c1502f6/EADGAa",
   configURL: process.env.CONFIG_URL || "https://config.plenty.network/v1/config",
   expressPort: process.env.EXPRESS_PORT || "3000",

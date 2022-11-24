@@ -21,7 +21,7 @@ export default class DatabaseClient {
 
       await this._dbClient.query(`
         CREATE TABLE IF NOT EXISTS data (
-          amm VARCHAR PRIMARY KEY,
+          pool VARCHAR PRIMARY KEY,
           token_1 VARCHAR NOT NULL,
           token_2 VARCHAR NOT NULL
         )
