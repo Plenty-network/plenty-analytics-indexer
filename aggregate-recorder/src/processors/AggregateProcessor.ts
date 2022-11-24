@@ -4,15 +4,15 @@ import TzktProvider from "../infrastructure/TzktProvider";
 import {
   Data,
   Pair,
+  Pool,
   Token,
   Config,
-  AmmType,
+  PoolType,
   PricingType,
   Dependecies,
   Transaction,
-  AmmContract,
   PlentyRecord,
-  TokenVariant,
+  TokenStandard,
   AggregateType,
   TransactionType,
   TransactionRecord,
@@ -37,17 +37,17 @@ export default class AggregateProcessor {
     // Last level received by the block-watcher
     this._lastLevel = lastLevel;
 
-    let currentAMM = "";
+    let currentPool = "";
     let currentLevel = 0;
     let currentOperation = "";
 
     try {
-      for (const ammAddress of Object.keys(this._data.amm)) {
-        // Fetch hashes of all operations on the amm that involve a swap
-        const operationHashes = await this._getOperationHashes(ammAddress);
+      for (const pool of Object.keys(this._data.pools)) {
+        // Fetch hashes of all operations on the pool that involve a swap
+        const operationHashes = await this._getOperationHashes(pool);
 
-        // Locally record current AMM being process for error logging
-        currentAMM = ammAddress;
+        // Locally record current pool being processed for error logging
+        currentPool = pool;
 
         for (const hash of operationHashes) {
           // Fetch individual operations and process them
@@ -58,15 +58,15 @@ export default class AggregateProcessor {
           currentOperation = hash;
 
           // Record the indexed level
-          await this._recordLastIndexed(this._data.amm[ammAddress], operation[0].level);
+          await this._recordLastIndexed(this._data.pools[pool], operation[0].level);
           // Handle the relevant transactions in the operation object
-          await this._processOperation(operation, this._data.amm[ammAddress]);
+          await this._processOperation(operation, this._data.pools[pool]);
         }
       }
     } catch (err) {
       throw new Error(`
         Error: ${err.message},\n
-        Last AMM: ${currentAMM},\n
+        Last Pool: ${currentPool},\n
         Last Level: ${currentLevel}\n
         Last opHash: ${currentOperation}\n
       `);
@@ -81,30 +81,30 @@ export default class AggregateProcessor {
    * @description processes each transaction in an operation. A transaction can be
    * swap, add-liquidity or remove-liquidity transaction.
    */
-  private async _processOperation(operation: Transaction[], amm: AmmContract): Promise<void> {
+  private async _processOperation(operation: Transaction[], pool: Pool): Promise<void> {
     try {
       for (const [index, txn] of operation.entries()) {
-        if (txn.target?.address === amm.address) {
+        if (txn.target?.address === pool.address) {
           if (constants.TXN_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
             // Pair token amount involved in the transaction
-            const token1Amount = this._getTokenAmountFromOperation(amm.token1, operation, index);
-            const token2Amount = this._getTokenAmountFromOperation(amm.token2, operation, index);
+            const token1Amount = this._getTokenAmountFromOperation(pool.token1, operation, index);
+            const token2Amount = this._getTokenAmountFromOperation(pool.token2, operation, index);
 
             // Pair token reserves during the transaction
-            const [token1Pool, token2Pool] = this._getTokenPoolFromStorage(txn, amm);
+            const [token1Pool, token2Pool] = this._getTokenPoolFromStorage(txn, pool);
 
             // Details of the involved in the txn
             const pair: Pair = {
-              address: amm.address,
-              type: amm.type,
+              address: pool.address,
+              type: pool.type,
               token1: {
-                data: amm.token1,
+                data: pool.token1,
                 pool: token1Pool,
                 amount: token1Amount,
                 price: 0,
               },
               token2: {
-                data: amm.token2,
+                data: pool.token2,
                 pool: token2Pool,
                 amount: token2Amount,
                 price: 0,
@@ -112,7 +112,7 @@ export default class AggregateProcessor {
             };
 
             // Check if the txn is already processed in the past
-            // (can happen if AMM is called multiple times in a batch)
+            // (can happen if pool is called multiple times in a batch)
             const _entry = await this._dbClient.get({
               table: "transaction",
               select: "id",
@@ -147,7 +147,7 @@ export default class AggregateProcessor {
       let token1Price: number, token2Price: number;
 
       // If it's a volatile pair, calculate the token prices from the reserves
-      if (pair.type === AmmType.VOLATILE) {
+      if (pair.type === PoolType.VOLATILE) {
         [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.STORAGE);
       } else {
         // else for stable pairs, get the last record price of each token
@@ -176,7 +176,7 @@ export default class AggregateProcessor {
           id,
           ts,
           hash,
-          amm,
+          pool,
           account,
           type,
           token_1_amount,
@@ -196,16 +196,16 @@ export default class AggregateProcessor {
         )`,
       });
 
-      // Record hourly aggregate data for the AMM
-      await this._recordAMMAggregate({
+      // Record hourly aggregate data for the pool
+      await this._recordPoolAggregate({
         ts,
         type,
         aggregateType: AggregateType.HOUR,
         pair,
       });
 
-      // Record daily aggregate data for the AMM
-      await this._recordAMMAggregate({
+      // Record daily aggregate data for the pool
+      await this._recordPoolAggregate({
         ts,
         type,
         aggregateType: AggregateType.DAY,
@@ -229,7 +229,7 @@ export default class AggregateProcessor {
       let type: TransactionType;
 
       // Decide transaction type based on whether token 1 is swapped for token 2 or vice versa
-      if (pair.address === constants.TEZ_CTEZ_AMM_ADDRESS) {
+      if (pair.address === this._config.tezCtezPool) {
         if (txn.parameter.entrypoint === constants.TEZ_SWAP_ENTRYPOINT) {
           type = TransactionType.SWAP_TOKEN_1; // token 1 is swapped for token 2
         } else {
@@ -245,7 +245,7 @@ export default class AggregateProcessor {
       }
 
       // For volatile pairs, use the token reserves (token-pool) to calculate price
-      if (pair.type === AmmType.VOLATILE) {
+      if (pair.type === PoolType.VOLATILE) {
         [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.STORAGE);
       } else {
         // For stable pairs, use the swap values (token-amount), since there is negligible slippage
@@ -270,7 +270,7 @@ export default class AggregateProcessor {
           id,
           ts,
           hash,
-          amm,
+          pool,
           account,
           type,
           token_1_amount,
@@ -290,16 +290,16 @@ export default class AggregateProcessor {
         )`,
       });
 
-      // Record hourly aggregate data for the AMM
-      await this._recordAMMAggregate({
+      // Record hourly aggregate data for the pool
+      await this._recordPoolAggregate({
         ts,
         type,
         aggregateType: AggregateType.HOUR,
         pair,
       });
 
-      // Record hourly aggregate data for the AMM
-      await this._recordAMMAggregate({
+      // Record hourly aggregate data for the pool
+      await this._recordPoolAggregate({
         ts,
         type,
         aggregateType: AggregateType.DAY,
@@ -314,9 +314,9 @@ export default class AggregateProcessor {
   // Assisting recorders
   //=====================
 
-  private async _recordAMMAggregate(txr: TransactionRecord): Promise<void> {
+  private async _recordPoolAggregate(txr: TransactionRecord): Promise<void> {
     try {
-      const table = `amm_aggregate_${txr.aggregateType.toLowerCase()}`;
+      const table = `pool_aggregate_${txr.aggregateType.toLowerCase()}`;
 
       // Get the start timestamp (UTC) of the hour/day in which txn timestamp is present
       const ts =
@@ -331,19 +331,19 @@ export default class AggregateProcessor {
       // Possible volume and fees for token 1
       const token1Amount = txr.pair.token1.amount;
       const token1Value = token1Amount * txr.pair.token1.price;
-      const token1FeesAmount = txr.pair.type === AmmType.STABLE ? token1Amount / 1000 : token1Amount / 290;
-      const token1FeesValue = txr.pair.type === AmmType.STABLE ? token1Value / 1000 : token1Value / 290;
+      const token1FeesAmount = txr.pair.type === PoolType.STABLE ? token1Amount / 1000 : token1Amount / 290;
+      const token1FeesValue = txr.pair.type === PoolType.STABLE ? token1Value / 1000 : token1Value / 290;
 
       // Possible volume and fees for token 2
       const token2Amount = txr.pair.token2.amount;
       const token2Value = token2Amount * txr.pair.token2.price;
-      const token2FeesAmount = txr.pair.type === AmmType.STABLE ? token2Amount / 1000 : token2Amount / 290;
-      const token2FeesValue = txr.pair.type === AmmType.STABLE ? token2Value / 1000 : token2Value / 290;
+      const token2FeesAmount = txr.pair.type === PoolType.STABLE ? token2Amount / 1000 : token2Amount / 290;
+      const token2FeesValue = txr.pair.type === PoolType.STABLE ? token2Value / 1000 : token2Value / 290;
 
       const _entry = await this._dbClient.get({
         table,
         select: "*",
-        where: `ts=${ts} AND amm='${txr.pair.address}'`,
+        where: `ts=${ts} AND pool='${txr.pair.address}'`,
       });
 
       // Set volume and fees based on it's a token 1 or token 2 swap in
@@ -352,7 +352,7 @@ export default class AggregateProcessor {
           table,
           columns: `(
             ts,
-            amm,
+            pool,
             token_1_volume,
             token_1_volume_value,
             token_2_volume,
@@ -410,7 +410,7 @@ export default class AggregateProcessor {
             token_2_locked=${txr.pair.token2.pool},
             token_2_locked_value=${txr.pair.token2.pool * txr.pair.token2.price}
           `,
-          where: `ts=${ts} AND amm='${txr.pair.address}'`,
+          where: `ts=${ts} AND pool='${txr.pair.address}'`,
         });
       }
 
@@ -468,8 +468,8 @@ export default class AggregateProcessor {
         const tokenValue = price * tokenAmount;
 
         // Fees calculated as 0.1% of stable trade value and 0.35% of volatile trade value
-        const feesAmount = txr.pair.type === AmmType.STABLE ? tokenAmount / 1000 : tokenAmount / 290;
-        const feesvalue = txr.pair.type === AmmType.STABLE ? tokenValue / 1000 : tokenValue / 290;
+        const feesAmount = txr.pair.type === PoolType.STABLE ? tokenAmount / 1000 : tokenAmount / 290;
+        const feesvalue = txr.pair.type === PoolType.STABLE ? tokenValue / 1000 : tokenValue / 290;
 
         const _entry = await this._dbClient.get({
           table,
@@ -538,7 +538,7 @@ export default class AggregateProcessor {
   }
 
   /**
-   * @description Records system wide aggregate across all plenty AMMs
+   * @description Records system wide aggregate across all plenty pools
    */
   private async _recordPlentyAggregate(plr: PlentyRecord): Promise<void> {
     try {
@@ -619,25 +619,25 @@ export default class AggregateProcessor {
   /**
    * @description inserts the last processed level into the db
    */
-  private async _recordLastIndexed(amm: AmmContract, level: number): Promise<void> {
+  private async _recordLastIndexed(pool: Pool, level: number): Promise<void> {
     try {
       const _entry = await this._dbClient.get({
         select: "*",
         table: "last_indexed",
-        where: `amm='${amm.address}'`,
+        where: `pool='${pool.address}'`,
       });
 
       if (_entry.rowCount !== 0) {
         await this._dbClient.update({
           table: "last_indexed",
           set: `level=${level}`,
-          where: `amm='${amm.address}'`,
+          where: `pool='${pool.address}'`,
         });
       } else {
         await this._dbClient.insert({
           table: "last_indexed",
-          columns: `(amm, level)`,
-          values: `('${amm.address}', ${level})`,
+          columns: `(pool, level)`,
+          values: `('${pool.address}', ${level})`,
         });
       }
     } catch (err) {
@@ -693,10 +693,10 @@ export default class AggregateProcessor {
    * @description Finds the token amount involved in an operation
    */
   private _getTokenAmountFromOperation(token: Token, operation: Transaction[], index: number): number {
-    switch (token.variant) {
-      case TokenVariant.TEZ: {
+    switch (token.standard) {
+      case TokenStandard.TEZ: {
         // Keep looping until a transaction with non-zero tez amount is found.
-        // This is valid only for tez-ctez amm
+        // This is valid only for tez-ctez pool
         while (true) {
           if (operation[index].amount !== 0) {
             return new BigNumber(operation[index].amount).dividedBy(10 ** token.decimals).toNumber();
@@ -704,7 +704,7 @@ export default class AggregateProcessor {
           index++;
         }
       }
-      case TokenVariant.FA2: {
+      case TokenStandard.FA2: {
         // Keep looping until a txn involving the FA2 token transfer is found.
         while (true) {
           if (
@@ -721,7 +721,7 @@ export default class AggregateProcessor {
           index++;
         }
       }
-      case TokenVariant.FA12: {
+      case TokenStandard.FA12: {
         // Keep looping until a txn involving the FA1.2 token transfer is found.
         while (true) {
           if (
@@ -740,29 +740,29 @@ export default class AggregateProcessor {
   /**
    * @description Calculate the token pair reserves
    */
-  private _getTokenPoolFromStorage(txn: Transaction, amm: AmmContract): [number, number] {
+  private _getTokenPoolFromStorage(txn: Transaction, pool: Pool): [number, number] {
     // Get the token reserves from storage (volatile || stable || tez-ctez)
     const token1Pool = txn.storage.token1Pool || txn.storage.token1_pool || txn.storage.tezPool;
     const token2Pool = txn.storage.token2Pool || txn.storage.token2_pool || txn.storage.ctezPool;
 
     // Get the numeric scaled down values
-    const token1PoolNumeric = new BigNumber(token1Pool).dividedBy(10 ** amm.token1.decimals);
-    const token2PoolNumeric = new BigNumber(token2Pool).dividedBy(10 ** amm.token2.decimals);
+    const token1PoolNumeric = new BigNumber(token1Pool).dividedBy(10 ** pool.token1.decimals);
+    const token2PoolNumeric = new BigNumber(token2Pool).dividedBy(10 ** pool.token2.decimals);
 
     return [token1PoolNumeric.toNumber(), token2PoolNumeric.toNumber()];
   }
 
   /**
-   * @description fetches the hashes of swap and liquidity operations on the AMM
+   * @description fetches the hashes of swap and liquidity operations on the pool
    */
-  private async _getOperationHashes(ammAddress: string): Promise<string[]> {
+  private async _getOperationHashes(poolAddress: string): Promise<string[]> {
     try {
-      const [firstLevel, lastLevel] = await this._getIndexingLevels(ammAddress);
+      const [firstLevel, lastLevel] = await this._getIndexingLevels(poolAddress);
       let offset = 0;
       let operationHashes: string[] = [];
       while (true) {
         const hashes = await this._tkztProvider.getTransactions<string[]>({
-          contract: ammAddress,
+          contract: poolAddress,
           entrypoint: [
             ...constants.SWAP_ENTRYPOINTS,
             ...constants.ADD_LIQUIDITY_ENTRYPOINTS,
@@ -816,18 +816,18 @@ export default class AggregateProcessor {
   }
 
   /**
-   * @description returns the level interval between which the amm swaps need to be indexed.
+   * @description returns the level interval between which the pool swaps need to be indexed.
    * The first level is the level at which USDC.e-ctez pair had the first swap.
    */
-  private async _getIndexingLevels(ammAddress: string): Promise<[number, number]> {
+  private async _getIndexingLevels(poolAddress: string): Promise<[number, number]> {
     try {
       const _entry = await this._dbClient.get({
         table: "last_indexed",
         select: "level",
-        where: `amm='${ammAddress}'`,
+        where: `pool='${poolAddress}'`,
       });
       if (_entry.rowCount === 0) {
-        return [constants.INDEXING_START_LEVEL, this._lastLevel];
+        return [parseInt(this._config.indexingStart), this._lastLevel];
       } else {
         return [parseInt(_entry.rows[0].level) + 1, this._lastLevel];
       }

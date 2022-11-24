@@ -38,7 +38,7 @@ export default class DatabaseClient {
           id numeric PRIMARY KEY,
           ts numeric NOT NULL,
           hash varchar NOT NULL,
-          amm varchar NOT NULL,
+          pool varchar NOT NULL,
           account varchar NOT NULL,
           type transaction_type NOT NULL,
           token_1_amount numeric(24, 6) NOT NULL,
@@ -96,9 +96,9 @@ export default class DatabaseClient {
       );
 
       await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS amm_aggregate_hour (
+        `CREATE TABLE IF NOT EXISTS pool_aggregate_hour (
           ts BIGINT,
-          amm varchar,
+          pool varchar,
           token_1_volume numeric(24, 6) NOT NULL,
           token_1_volume_value numeric(24, 6) NOT NULL,
           token_2_volume numeric(24, 6) NOT NULL,
@@ -111,14 +111,14 @@ export default class DatabaseClient {
           token_1_locked_value numeric(24, 6) NOT NULL,
           token_2_locked numeric(24, 6) NOT NULL,
           token_2_locked_value numeric(24, 6) NOT NULL,
-          PRIMARY KEY (ts, amm)
+          PRIMARY KEY (ts, pool)
         );`
       );
 
       await this._dbClient.query(
-        `CREATE TABLE IF NOT EXISTS amm_aggregate_day (
+        `CREATE TABLE IF NOT EXISTS pool_aggregate_day (
           ts BIGINT,
-          amm varchar,
+          pool varchar,
           token_1_volume numeric(24, 6) NOT NULL,
           token_1_volume_value numeric(24, 6) NOT NULL,
           token_2_volume numeric(24, 6) NOT NULL,
@@ -131,13 +131,13 @@ export default class DatabaseClient {
           token_1_locked_value numeric(24, 6) NOT NULL,
           token_2_locked numeric(24, 6) NOT NULL,
           token_2_locked_value numeric(24, 6) NOT NULL,
-          PRIMARY KEY (ts, amm)
+          PRIMARY KEY (ts, pool)
         );`
       );
 
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS last_indexed (
-          amm varchar PRIMARY KEY,
+          pool varchar PRIMARY KEY,
           level numeric
         );`
       );

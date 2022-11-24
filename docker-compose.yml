@@ -15,6 +15,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    volumes:
+      - "${PG_VOLUME_DIR}:/var/lib/postgresql/data"
 
   block-watcher:
     build: ./block-watcher
@@ -33,8 +35,10 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_HOST: "${POSTGRES_HOST}"
-      NETWORK: "${NETWORK}"
       TZKT_URL: "${TZKT_URL}"
+      CONFIG_URL: "${CONFIG_URL}"
+      TEZ_CTEZ_POOL: "${TEZ_CTEZ_POOL}"
+      INDEXING_START: "${INDEXING_START}"
 
   api:
     build: ./api

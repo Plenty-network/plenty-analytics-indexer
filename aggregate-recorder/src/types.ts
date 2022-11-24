@@ -6,7 +6,6 @@ import TzktProvider from "./infrastructure/TzktProvider";
 //===============
 
 export interface Config {
-  network: string;
   heartbeatURL: string;
   tzktURL: string;
   configURL: string;
@@ -20,6 +19,8 @@ export interface Config {
     password: string;
     host: string;
   };
+  tezCtezPool: string;
+  indexingStart: string;
 }
 
 export interface Dependecies {
@@ -101,42 +102,42 @@ export interface Transaction {
 // Plenty config types
 //=====================
 
-export enum TokenVariant {
+export enum TokenStandard {
   TEZ = "TEZ",
   FA12 = "FA1.2",
   FA2 = "FA2",
 }
 
 export interface Token {
-  address: string | undefined;
   symbol: string;
-  variant: TokenVariant;
-  tokenId: number | undefined;
   decimals: number;
+  standard: TokenStandard;
+  address?: string;
+  tokenId?: number;
 }
 
 export interface Tokens {
   [key: string]: Token;
 }
 
-export enum AmmType {
+export enum PoolType {
   STABLE = "STABLE",
   VOLATILE = "VOLATILE",
 }
 
-export interface AmmContract {
+export interface Pool {
   address: string;
   token1: Token;
   token2: Token;
-  type: AmmType;
+  type: PoolType;
 }
 
-export interface AmmContracts {
-  [key: string]: AmmContract;
+export interface Pools {
+  [key: string]: Pool;
 }
 
 export interface Data {
-  amm: AmmContracts;
+  pools: Pools;
 }
 
 //=================
@@ -150,7 +151,7 @@ export enum PricingType {
 
 export interface Pair {
   address: string;
-  type: AmmType;
+  type: PoolType;
   token1: {
     data: Token;
     pool: number;
