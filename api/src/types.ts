@@ -106,6 +106,8 @@ export interface PoolResponse {
     history?: { [key: string]: string }[];
   };
   tvl: {
+    token1Amount: string;
+    token2Amount: string;
     value: string;
     change24H: string;
     history?: { [key: string]: string }[];

@@ -28,7 +28,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         return await dbClient.get({
           table: `pool_aggregate_hour`,
           select: `
-            pool, 
+            pool,
             SUM(token_1_volume_value) as t1volume,
             SUM(token_2_volume_value) as t2volume,
             SUM(token_1_fees_value) as t1fees,
@@ -41,7 +41,12 @@ function build({ getData, dbClient }: Dependencies): Router {
       // Fetch pool locked value (<=) to supplied timestamp
       async function getLockedValueAll(ts: number) {
         return await dbClient.raw(`
-          SELECT t.pool, t.token_1_locked_value l1, t.token_2_locked_value l2
+          SELECT 
+            t.pool,
+            t.token_1_locked la1, 
+            t.token_2_locked la2, 
+            t.token_1_locked_value l1, 
+            t.token_2_locked_value l2
           FROM (
             SELECT MAX(ts) mts, pool 
             FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
@@ -131,6 +136,8 @@ function build({ getData, dbClient }: Dependencies): Router {
             history: req.params.pool ? feesHistory : undefined,
           },
           tvl: {
+            token1Amount: parseFloat(lastLockedValueCH[pool]?.la1 ?? 0).toFixed(6),
+            token2Amount: parseFloat(lastLockedValueCH[pool]?.la2 ?? 0).toFixed(6),
             value: lockedValueCH.toFixed(6),
             // (tvl record 24 hrs ago, last tvl record)
             change24H: percentageChange(lockedValue24H, lockedValueCH),
