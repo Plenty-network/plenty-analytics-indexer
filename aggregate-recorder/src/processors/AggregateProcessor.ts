@@ -23,26 +23,28 @@ export default class AggregateProcessor {
   private _config: Config;
   private _dbClient: DatabaseClient;
   private _tkztProvider: TzktProvider;
-  private _data: Data;
+  private _getData: () => Promise<Data>;
   private _lastLevel: number;
 
-  constructor({ config, dbClient, tzktProvider, data }: Dependecies) {
+  constructor({ config, dbClient, tzktProvider, getData }: Dependecies) {
     this._config = config;
+    this._getData = getData;
     this._dbClient = dbClient;
     this._tkztProvider = tzktProvider;
-    this._data = data;
   }
 
   async process(lastLevel: number): Promise<void> {
     // Last level received by the block-watcher
     this._lastLevel = lastLevel;
 
+    const data = await this._getData();
+
     let currentPool = "";
     let currentLevel = 0;
     let currentOperation = "";
 
     try {
-      for (const pool of Object.keys(this._data.pools)) {
+      for (const pool of Object.keys(data.pools)) {
         // Fetch hashes of all operations on the pool that involve a swap
         const operationHashes = await this._getOperationHashes(pool);
 
@@ -58,9 +60,9 @@ export default class AggregateProcessor {
           currentOperation = hash;
 
           // Record the indexed level
-          await this._recordLastIndexed(this._data.pools[pool], operation[0].level);
+          await this._recordLastIndexed(data.pools[pool], operation[0].level);
           // Handle the relevant transactions in the operation object
-          await this._processOperation(operation, this._data.pools[pool]);
+          await this._processOperation(operation, data.pools[pool]);
         }
       }
     } catch (err) {

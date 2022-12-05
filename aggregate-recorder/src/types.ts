@@ -13,6 +13,9 @@ export interface Config {
   reorgLag: number;
   tzktLimit: number;
   tzktOffset: number;
+  ttl: {
+    data: number;
+  };
   postgres: {
     username: string;
     database: string;
@@ -27,11 +30,17 @@ export interface Dependecies {
   config: Config;
   dbClient: DatabaseClient;
   tzktProvider: TzktProvider;
-  data: Data;
+  getData: () => Promise<Data>;
 }
 
 export interface BlockData {
   level: number;
+}
+
+export interface CachedValue {
+  data: any;
+  storedAt: Date | undefined;
+  ttl: number | undefined;
 }
 
 //================

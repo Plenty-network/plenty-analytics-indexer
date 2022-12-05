@@ -8,6 +8,9 @@ export const config: Config = {
   reorgLag: 2,
   tzktLimit: 1000,
   tzktOffset: 1000,
+  ttl: {
+    data: parseInt(process.env.DATA_TTL) || 300000,
+  },
   postgres: {
     username: process.env.POSTGRES_USER || "master",
     database: process.env.POSTGRES_DB || "plenty",
