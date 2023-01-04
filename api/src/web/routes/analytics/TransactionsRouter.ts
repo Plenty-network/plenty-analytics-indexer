@@ -36,7 +36,7 @@ function build({ getData, dbClient }: Dependencies): Router {
             value
           FROM transaction
           WHERE pool='${req.query.pool}'
-          ORDER BY ts
+          ORDER BY ts DESC
           LIMIT 100;
         `);
         transactions = _entry.rows;
@@ -60,7 +60,7 @@ function build({ getData, dbClient }: Dependencies): Router {
           FROM transaction t
           JOIN data d ON t.pool=d.pool
           WHERE d.token_1='${req.query.token}' OR d.token_2='${req.query.token}'
-          ORDER BY ts
+          ORDER BY ts DESC
           LIMIT 100;
         `);
 
@@ -84,7 +84,7 @@ function build({ getData, dbClient }: Dependencies): Router {
             account='${req.query.account}'
               AND 
             ${req.query.type === "swap" ? "(type='swap_token_1' OR type='swap_token_2')" : "type='add_liquidity'"}
-          ORDER BY ts
+          ORDER BY ts DESC
           LIMIT 100;
         `);
 
@@ -102,7 +102,7 @@ function build({ getData, dbClient }: Dependencies): Router {
             token_2_amount token2Amount,
             value
           FROM transaction
-          ORDER BY ts
+          ORDER BY ts DESC
           LIMIT 100;
         `);
         transactions = _entry.rows;
