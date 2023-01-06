@@ -253,7 +253,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
           pairs.push({
             symbol: `${totalPairWise24H[pool].token_1}/${totalPairWise24H[pool].token_2}`,
             contract: pool,
-            exchangeLink: `https://plentydefi.com/swap?from=${totalPairWise24H[pool].token_1}&to=${totalPairWise24H[pool].token_2}`,
+            exchangeLink: `https://app.plenty.network/swap?from=${totalPairWise24H[pool].token_1}&to=${totalPairWise24H[pool].token_2}`,
             price: {
               value: priceInPairCH.toFixed(6),
               change24H: percentageChange(priceInPair24H, priceInPairCH),
