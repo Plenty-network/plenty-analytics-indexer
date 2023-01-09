@@ -5,7 +5,7 @@ export const config: Config = {
   configURL: process.env.CONFIG_URL || "https://config.plenty.network/v1/config",
   expressPort: process.env.EXPRESS_PORT || "3000",
   ttl: {
-    data: parseInt(process.env.DATA_TTL) || 900000,
+    data: parseInt(process.env.DATA_TTL) || 60000,
     history: parseInt(process.env.HISTORY_TTL) || 0,
   },
   postgres: {

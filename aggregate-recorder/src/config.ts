@@ -9,7 +9,7 @@ export const config: Config = {
   tzktLimit: 1000,
   tzktOffset: 1000,
   ttl: {
-    data: parseInt(process.env.DATA_TTL) || 300000,
+    data: parseInt(process.env.DATA_TTL) || 60000,
   },
   postgres: {
     username: process.env.POSTGRES_USER || "master",
