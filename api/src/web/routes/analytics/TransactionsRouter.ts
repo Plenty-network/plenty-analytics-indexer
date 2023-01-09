@@ -8,7 +8,7 @@ function build({ getData, dbClient }: Dependencies): Router {
     pool?: string;
     token?: string;
     account?: string;
-    type?: "swap" | "liquidity";
+    type?: "swap" | "add_liquidity" | "remove_liquidity";
   }
 
   router.get("/", async (req: Request<{}, {}, {}, Query>, res: Response) => {
@@ -17,6 +17,42 @@ function build({ getData, dbClient }: Dependencies): Router {
       const data = await getData();
 
       let transactions: TransactionResponse[];
+
+      // Query validations
+      if (req.query.pool) {
+        if (req.query.token) {
+          res.json({ error: "Token query not allowed along with pool." });
+          return;
+        } else if (!data.pools.includes(req.query.pool)) {
+          res.json({ error: "Pool does not exist." });
+          return;
+        }
+      }
+
+      if (req.query.token) {
+        if (req.query.pool) {
+          res.json({ error: "Pool query not allowed along with token." });
+          return;
+        } else if (!data.tokens[req.query.token]) {
+          res.json({ error: "Token does not exist." });
+          return;
+        }
+      }
+
+      if (req.query.type && !["swap", "add_liquidity", "remove_liquidity"].includes(req.query.type)) {
+        res.json({
+          error: "Invalid type query. Choose from 'swap', 'add_liquidity' and 'remove_liquidity'",
+        });
+        return;
+      }
+
+      function getTypeSelector(type: string) {
+        if (type === "swap") {
+          return `(t.type='swap_token_1' OR t.type='swap_token_2')`;
+        } else {
+          return `t.type='${type}'`;
+        }
+      }
 
       if (req.query.pool) {
         if (!data.pools.includes(req.query.pool)) {
@@ -34,18 +70,15 @@ function build({ getData, dbClient }: Dependencies): Router {
             token_1_amount token1Amount,
             token_2_amount token2Amount,
             value
-          FROM transaction
-          WHERE pool='${req.query.pool}'
-          ORDER BY ts DESC
+          FROM transaction t
+          WHERE 
+            t.pool='${req.query.pool}'
+            ${req.query.type ? `AND ${getTypeSelector(req.query.type)}` : ""}
+          ORDER BY t.ts DESC
           LIMIT 100;
         `);
         transactions = _entry.rows;
       } else if (req.query.token) {
-        if (!data.tokens[req.query.token]) {
-          res.json({ error: "Token does not exist." });
-          return;
-        }
-
         // Select transactions where the given token is involved
         const _entry = await dbClient.raw(`
           SELECT
@@ -60,31 +93,8 @@ function build({ getData, dbClient }: Dependencies): Router {
           FROM transaction t
           JOIN data d ON t.pool=d.pool
           WHERE d.token_1='${req.query.token}' OR d.token_2='${req.query.token}'
-          ORDER BY ts DESC
-          LIMIT 100;
-        `);
-
-        transactions = _entry.rows;
-      } // This can be improved by reducing code-repetition
-      else if (req.query.account && req.query.type) {
-        // Used only for the airdrop backend
-        const _entry = await dbClient.raw(`
-          SELECT
-            id,
-            ts timestamp,
-            hash opHash,
-            pool,
-            account,
-            type,
-            token_1_amount token1Amount,
-            token_2_amount token2Amount,
-            value
-          FROM transaction
-          WHERE 
-            account='${req.query.account}'
-              AND 
-            ${req.query.type === "swap" ? "(type='swap_token_1' OR type='swap_token_2')" : "type='add_liquidity'"}
-          ORDER BY ts DESC
+          ${req.query.type ? `AND ${getTypeSelector(req.query.type)}` : ""}
+          ORDER BY t.ts DESC
           LIMIT 100;
         `);
 
@@ -101,8 +111,9 @@ function build({ getData, dbClient }: Dependencies): Router {
             token_1_amount token1Amount,
             token_2_amount token2Amount,
             value
-          FROM transaction
-          ORDER BY ts DESC
+          FROM transaction t
+          ${req.query.type ? `WHERE ${getTypeSelector(req.query.type)}` : ""}
+          ORDER BY t.ts DESC
           LIMIT 100;
         `);
         transactions = _entry.rows;
