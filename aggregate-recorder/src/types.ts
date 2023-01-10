@@ -173,6 +173,7 @@ export interface Pair {
     amount: number;
     price: number;
   };
+  transactionType?: TransactionType;
 }
 
 export enum AggregateType {

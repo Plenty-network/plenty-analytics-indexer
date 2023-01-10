@@ -124,10 +124,12 @@ export default class AggregateProcessor {
 
             // Handle the transaction and pair based on the transaction type
             if (constants.ADD_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
+              pair.transactionType = TransactionType.ADD_LIQUIDITY;
               await this._processLiquidityOperation(txn, pair, TransactionType.ADD_LIQUIDITY);
             } else if (constants.SWAP_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
               await this._processSwapOperation(txn, pair);
             } else if (constants.REMOVE_LIQUIDITY_ENTRYPOINS.includes(txn.parameter?.entrypoint)) {
+              pair.transactionType = TransactionType.REMOVE_LIQUIDITY;
               await this._processLiquidityOperation(txn, pair, TransactionType.REMOVE_LIQUIDITY);
             }
           }
@@ -245,6 +247,8 @@ export default class AggregateProcessor {
       } else {
         type = TransactionType.SWAP_TOKEN_2;
       }
+
+      pair.transactionType = type;
 
       // For volatile pairs, use the token reserves (token-pool) to calculate price
       if (pair.type === PoolType.VOLATILE) {
@@ -670,14 +674,24 @@ export default class AggregateProcessor {
       } else if (pair.token2.data.symbol === "USDC.e") {
         token2Price = 1;
         token1Price = token2Base / token1Base;
-      } else {
-        // else use any one of the tokens that has a non-zero value
+      } // A little hackish way
+      else if (pair.transactionType === TransactionType.SWAP_TOKEN_1 || pair.transactionType.includes("LIQUIDITY")) {
+        // Get price in terms of token2 (output token)
         token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
         if (token2Price !== 0) {
           token1Price = (token2Base * token2Price) / token1Base;
         } else {
           token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
           token2Price = (token1Base * token1Price) / token2Base;
+        }
+      } else {
+        // price in terms of token 1
+        token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
+        if (token1Price !== 0) {
+          token2Price = (token1Base * token1Price) / token2Base;
+        } else {
+          token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
+          token1Price = (token2Base * token2Price) / token1Base;
         }
       }
 
