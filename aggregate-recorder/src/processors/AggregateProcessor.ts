@@ -19,6 +19,9 @@ import {
 } from "../types";
 import { constants } from "../constants";
 
+BigNumber.set({ EXPONENTIAL_AT: 36 });
+BigNumber.set({ DECIMAL_PLACES: 12 });
+
 export default class AggregateProcessor {
   private _config: Config;
   private _dbClient: DatabaseClient;
@@ -148,7 +151,7 @@ export default class AggregateProcessor {
       // Bring transaction timestamp to a suitable form
       const ts = Math.floor(new Date(txn.timestamp).getTime() / 1000);
 
-      let token1Price: number, token2Price: number;
+      let token1Price: BigNumber, token2Price: BigNumber;
 
       // If it's a volatile pair, calculate the token prices from the reserves
       if (pair.type === PoolType.VOLATILE) {
@@ -160,14 +163,14 @@ export default class AggregateProcessor {
 
         // If any one of the token does not have a recorded price,
         // assume that it's a fresh liquidity addition and try getting the price through reserves
-        if (token1Price === 0 || token2Price === 0) {
+        if (token1Price.isEqualTo(0) || token2Price.isEqualTo(0)) {
           [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.STORAGE);
         }
       }
 
       // Set the prices in the pair object
-      pair.token1.price = token1Price;
-      pair.token2.price = token2Price;
+      pair.token1.price = token1Price.toNumber();
+      pair.token2.price = token2Price.toNumber();
 
       // Record spot price of the tokens
       await this._recordSpotPrice(ts, pair.token1.data, token1Price);
@@ -196,7 +199,7 @@ export default class AggregateProcessor {
           '${type.toLowerCase()}',
           ${pair.token1.amount},
           ${pair.token2.amount},
-          ${pair.token1.amount * token1Price + pair.token2.amount * token2Price}
+          ${token1Price.multipliedBy(pair.token1.amount).plus(token2Price.multipliedBy(pair.token2.amount)).toString()}
         )`,
       });
 
@@ -228,7 +231,7 @@ export default class AggregateProcessor {
       // Bring transaction timestamp to a suitable form
       const ts = Math.floor(new Date(txn.timestamp).getTime() / 1000);
 
-      let token1Price: number, token2Price: number;
+      let token1Price: BigNumber, token2Price: BigNumber;
 
       let type: TransactionType;
 
@@ -259,8 +262,8 @@ export default class AggregateProcessor {
       }
 
       // Set the prices in the pair object
-      pair.token1.price = token1Price;
-      pair.token2.price = token2Price;
+      pair.token1.price = token1Price.toNumber();
+      pair.token2.price = token2Price.toNumber();
 
       // Record spot price of the tokens
       await this._recordSpotPrice(ts, pair.token1.data, token1Price);
@@ -292,7 +295,11 @@ export default class AggregateProcessor {
           '${type.toLowerCase()}',   
           ${pair.token1.amount},
           ${pair.token2.amount},
-          ${isSwap1 ? pair.token1.amount * token1Price : pair.token2.amount * token2Price}
+          ${
+            isSwap1
+              ? token1Price.multipliedBy(pair.token1.amount).toString()
+              : token2Price.multipliedBy(pair.token2.amount).toString()
+          }
         )`,
       });
 
@@ -593,7 +600,7 @@ export default class AggregateProcessor {
   /**
    * @description Simply records the price of a token at a given timestamp in price_spot table.
    */
-  private async _recordSpotPrice(ts: number, token: Token, price: number): Promise<void> {
+  private async _recordSpotPrice(ts: number, token: Token, price: BigNumber): Promise<void> {
     try {
       // Do not record, since USDC.e is set to $1
       if (token.symbol === "USDC.e") return;
@@ -607,14 +614,14 @@ export default class AggregateProcessor {
       if (_entry.rowCount !== 0) {
         await this._dbClient.update({
           table: "price_spot",
-          set: `value=${price}`,
+          set: `value=${price.toString()}`,
           where: `ts=${ts} AND token='${token.symbol}'`,
         });
       } else {
         await this._dbClient.insert({
           table: "price_spot",
           columns: "(ts, token, value)",
-          values: `(${ts}, '${token.symbol}', ${price})`,
+          values: `(${ts}, '${token.symbol}', ${price.toString()})`,
         });
       }
     } catch (err) {
@@ -658,10 +665,10 @@ export default class AggregateProcessor {
   /**
    * @description Calculate the spot price of a token pair at a given timestamp
    */
-  private async _calculatePrice(ts: number, pair: Pair, type: PricingType): Promise<[number, number]> {
+  private async _calculatePrice(ts: number, pair: Pair, type: PricingType): Promise<[BigNumber, BigNumber]> {
     try {
-      let token1Price: number;
-      let token2Price: number;
+      let token1Price: BigNumber;
+      let token2Price: BigNumber;
 
       // For storage-based pricing use the token reserves, and for swap-based use the transaction token-amount
       const token1Base = type === PricingType.STORAGE ? pair.token1.pool : pair.token1.amount;
@@ -669,29 +676,29 @@ export default class AggregateProcessor {
 
       // If USDC is one of the tokens, then use it as the dollar base.
       if (pair.token1.data.symbol === "USDC.e") {
-        token1Price = 1;
-        token2Price = token1Base / token2Base;
+        token1Price = new BigNumber(1);
+        token2Price = new BigNumber(token1Base).dividedBy(token2Base);
       } else if (pair.token2.data.symbol === "USDC.e") {
-        token2Price = 1;
-        token1Price = token2Base / token1Base;
+        token2Price = new BigNumber(1);
+        token1Price = new BigNumber(token2Base).dividedBy(token1Base);
       } // A little hackish way
       else if (pair.transactionType === TransactionType.SWAP_TOKEN_1 || pair.transactionType.includes("LIQUIDITY")) {
         // Get price in terms of token2 (output token)
         token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
-        if (token2Price !== 0) {
-          token1Price = (token2Base * token2Price) / token1Base;
+        if (token2Price.isGreaterThan(0)) {
+          token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
         } else {
           token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
-          token2Price = (token1Base * token1Price) / token2Base;
+          token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
         }
       } else {
         // price in terms of token 1
         token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
-        if (token1Price !== 0) {
-          token2Price = (token1Base * token1Price) / token2Base;
+        if (token1Price.isGreaterThan(0)) {
+          token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
         } else {
           token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
-          token1Price = (token2Base * token2Price) / token1Base;
+          token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
         }
       }
 
@@ -806,9 +813,9 @@ export default class AggregateProcessor {
   /**
    * @description fetches the spot price of a token at a specific timestamp
    */
-  private async _getPriceAt(ts: number, tokenSymbol: string): Promise<number> {
+  private async _getPriceAt(ts: number, tokenSymbol: string): Promise<BigNumber> {
     if (tokenSymbol === "USDC.e") {
-      return 1;
+      return new BigNumber(1);
     } else {
       try {
         const _entry = await this._dbClient.get({
@@ -821,9 +828,9 @@ export default class AggregateProcessor {
           `,
         });
         if (_entry.rowCount === 0) {
-          return 0;
+          return new BigNumber(0);
         } else {
-          return parseFloat(_entry.rows[0].value);
+          return new BigNumber(_entry.rows[0].value);
         }
       } catch (err) {
         throw err;

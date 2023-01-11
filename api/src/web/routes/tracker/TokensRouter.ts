@@ -1,3 +1,4 @@
+import BigNumber from "bignumber.js";
 import { Request, Response, Router } from "express";
 import { convertToMap, percentageChange, aggregateBykey } from "../../../utils";
 import { Dependencies, PriceOHLC, TokenTrackerResponse } from "../../../types";
@@ -274,7 +275,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
           symbol: token,
           contract: data.tokens[token].address,
           price: {
-            value: priceCH.toString(),
+            value: new BigNumber(lastAggregateCH[token]?.close_price ?? 0).toString(),
             change24H: percentageChange(price24H, priceCH), // (closing price 24 hrs ago, last closing price)
             history: req.params.token ? priceHistory : undefined,
           },

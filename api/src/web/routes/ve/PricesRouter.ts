@@ -1,6 +1,7 @@
 import { Request, Response, Router } from "express";
 import { convertToMap } from "../../../utils";
 import { Dependencies, PriceResponse } from "../../../types";
+import BigNumber from "bignumber.js";
 
 function build({ getData, dbClient }: Dependencies): Router {
   const router = Router();
@@ -38,7 +39,7 @@ function build({ getData, dbClient }: Dependencies): Router {
 
         tokens.push({
           token,
-          price: priceCH.toFixed(6),
+          price: new BigNumber(lastAggregateCH[token]?.close_price ?? 0).toString(),
         });
       }
 

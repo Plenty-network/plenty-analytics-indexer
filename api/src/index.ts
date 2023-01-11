@@ -3,7 +3,11 @@ import { config } from "./config";
 import { httpServer } from "./web/Server";
 import { buildDependencies } from "./dependencies";
 
+import BigNumber from "bignumber.js";
+
 import HeartBeat from "./infrastructure/Heartbeat";
+
+BigNumber.set({ EXPONENTIAL_AT: 36 });
 
 const heartbeat = new HeartBeat(config);
 
