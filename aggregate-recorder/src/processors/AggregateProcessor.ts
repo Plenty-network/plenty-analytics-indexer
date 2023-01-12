@@ -602,8 +602,8 @@ export default class AggregateProcessor {
    */
   private async _recordSpotPrice(ts: number, token: Token, price: BigNumber): Promise<void> {
     try {
-      // Do not record, since USDC.e is set to $1
-      if (token.symbol === "USDC.e") return;
+      // Do not record dollar stablecoins
+      if (constants.DOLLAR_STABLECOINS.includes(token.symbol)) return;
 
       const _entry = await this._dbClient.get({
         table: "price_spot",
@@ -664,42 +664,31 @@ export default class AggregateProcessor {
 
   /**
    * @description Calculate the spot price of a token pair at a given timestamp
+   * @description Does not price tokens not paired with dollar stables or CTez
    */
   private async _calculatePrice(ts: number, pair: Pair, type: PricingType): Promise<[BigNumber, BigNumber]> {
     try {
-      let token1Price: BigNumber;
-      let token2Price: BigNumber;
+      let token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
+      let token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
 
       // For storage-based pricing use the token reserves, and for swap-based use the transaction token-amount
       const token1Base = type === PricingType.STORAGE ? pair.token1.pool : pair.token1.amount;
       const token2Base = type === PricingType.STORAGE ? pair.token2.pool : pair.token2.amount;
 
-      // If USDC is one of the tokens, then use it as the dollar base.
-      if (pair.token1.data.symbol === "USDC.e") {
+      // If one of the tokens is a stablecoin, then use it as the dollar base.
+      if (constants.DOLLAR_STABLECOINS.includes(pair.token1.data.symbol)) {
         token1Price = new BigNumber(1);
         token2Price = new BigNumber(token1Base).dividedBy(token2Base);
-      } else if (pair.token2.data.symbol === "USDC.e") {
+      } else if (constants.DOLLAR_STABLECOINS.includes(pair.token2.data.symbol)) {
         token2Price = new BigNumber(1);
         token1Price = new BigNumber(token2Base).dividedBy(token1Base);
-      } // A little hackish way
-      else if (pair.transactionType === TransactionType.SWAP_TOKEN_1 || pair.transactionType.includes("LIQUIDITY")) {
-        // Get price in terms of token2 (output token)
-        token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
-        if (token2Price.isGreaterThan(0)) {
-          token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
-        } else {
-          token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
-          token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
-        }
-      } else {
-        // price in terms of token 1
+      } // Price in terms of CTez
+      else if (pair.token1.data.symbol === "CTez") {
         token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
-        if (token1Price.isGreaterThan(0)) {
-          token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
-        } else {
-          token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
-          token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
-        }
+        token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
+      } else if (pair.token2.data.symbol === "CTez") {
+        token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
+        token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
       }
 
       return [token1Price, token2Price];
@@ -814,7 +803,7 @@ export default class AggregateProcessor {
    * @description fetches the spot price of a token at a specific timestamp
    */
   private async _getPriceAt(ts: number, tokenSymbol: string): Promise<BigNumber> {
-    if (tokenSymbol === "USDC.e") {
+    if (constants.DOLLAR_STABLECOINS.includes(tokenSymbol)) {
       return new BigNumber(1);
     } else {
       try {
