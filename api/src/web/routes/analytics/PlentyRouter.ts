@@ -68,7 +68,7 @@ function build({ cache, config, dbClient }: Dependencies): Router {
       const t1LockedValue24H = parseFloat((await getLockedValueHour(t24h, 1)).rows[0].sum ?? 0);
       const t2LockedValue24H = parseFloat((await getLockedValueHour(t24h, 2)).rows[0].sum ?? 0);
 
-      const t1LockedValueCH = parseFloat((await getLockedValueHour(tch, 2)).rows[0].sum ?? 0);
+      const t1LockedValueCH = parseFloat((await getLockedValueHour(tch, 1)).rows[0].sum ?? 0);
       const t2LockedValueCH = parseFloat((await getLockedValueHour(tch, 2)).rows[0].sum ?? 0);
 
       // Retrieve data fields from DB entry
