@@ -344,14 +344,16 @@ export default class AggregateProcessor {
       // Possible volume and fees for token 1
       const token1Amount = txr.pair.token1.amount;
       const token1Value = token1Amount * txr.pair.token1.price;
-      const token1FeesAmount = txr.pair.type === PoolType.STABLE ? token1Amount / 1000 : token1Amount / 290;
-      const token1FeesValue = txr.pair.type === PoolType.STABLE ? token1Value / 1000 : token1Value / 290;
+      const token1FeesAmount =
+        txr.pair.address === this._config.tezCtezPool ? token1Amount / 1000 : token1Amount / 2000;
+      const token1FeesValue = txr.pair.address === this._config.tezCtezPool ? token1Value / 1000 : token1Value / 2000;
 
       // Possible volume and fees for token 2
       const token2Amount = txr.pair.token2.amount;
       const token2Value = token2Amount * txr.pair.token2.price;
-      const token2FeesAmount = txr.pair.type === PoolType.STABLE ? token2Amount / 1000 : token2Amount / 290;
-      const token2FeesValue = txr.pair.type === PoolType.STABLE ? token2Value / 1000 : token2Value / 290;
+      const token2FeesAmount =
+        txr.pair.address === this._config.tezCtezPool ? token2Amount / 1000 : token2Amount / 2000;
+      const token2FeesValue = txr.pair.address === this._config.tezCtezPool ? token2Value / 1000 : token2Value / 2000;
 
       const _entry = await this._dbClient.get({
         table,
