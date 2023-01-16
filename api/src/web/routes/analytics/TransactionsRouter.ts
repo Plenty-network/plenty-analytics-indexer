@@ -74,6 +74,7 @@ function build({ getData, dbClient }: Dependencies): Router {
           WHERE 
             t.pool='${req.query.pool}'
             ${req.query.type ? `AND ${getTypeSelector(req.query.type)}` : ""}
+            ${req.query.account ? `AND account='${req.query.account}'` : ""}
           ORDER BY t.ts DESC
           LIMIT 100;
         `);
@@ -92,8 +93,9 @@ function build({ getData, dbClient }: Dependencies): Router {
             t.value
           FROM transaction t
           JOIN data d ON t.pool=d.pool
-          WHERE d.token_1='${req.query.token}' OR d.token_2='${req.query.token}'
+          WHERE (d.token_1='${req.query.token}' OR d.token_2='${req.query.token}')
           ${req.query.type ? `AND ${getTypeSelector(req.query.type)}` : ""}
+          ${req.query.account ? `AND account='${req.query.account}'` : ""}
           ORDER BY t.ts DESC
           LIMIT 100;
         `);
@@ -113,6 +115,7 @@ function build({ getData, dbClient }: Dependencies): Router {
             value
           FROM transaction t
           ${req.query.type ? `WHERE ${getTypeSelector(req.query.type)}` : ""}
+          ${req.query.account ? `${req.query.type ? "AND" : "WHERE"} account='${req.query.account}'` : ""}
           ORDER BY t.ts DESC
           LIMIT 100;
         `);
