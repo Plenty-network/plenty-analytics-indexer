@@ -62,6 +62,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         // Select transactions where the given pool is involved
         const _entry = await dbClient.raw(`
           SELECT
+            id,
             ts timestamp,
             hash opHash,
             pool,
@@ -83,6 +84,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         // Select transactions where the given token is involved
         const _entry = await dbClient.raw(`
           SELECT
+            t.id,
             t.ts timestamp,
             t.hash opHash,
             t.pool,
@@ -105,6 +107,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         // Select top transactions by ts
         const _entry = await dbClient.raw(`
           SELECT 
+            id,
             ts timestamp,
             hash opHash,
             pool,
