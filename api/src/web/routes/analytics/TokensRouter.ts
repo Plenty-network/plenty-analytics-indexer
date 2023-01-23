@@ -97,6 +97,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       const t2LockedValueCH = convertToMap((await getLockedValueAll(tch, 2)).rows, "token_2");
 
       let aggregate1Y = [];
+      let price7D = [];
       const tvlHistory = [];
 
       if (req.params.token) {
@@ -104,17 +105,27 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         const _entry = await dbClient.get({
           table: `token_aggregate_day`,
           select: `
-            ts, 
-            open_price o, 
-            high_price h, 
-            low_price l, 
-            close_price c, 
+            ts,
             volume_value,
             fees_value
           `,
           where: `token='${req.params.token}' AND ts>=${t1y} AND ts<=${tch} ORDER BY ts`,
         });
         aggregate1Y = _entry.rows;
+
+        // Fetch hourly candles for 7 days
+        const __entry = await dbClient.get({
+          table: `token_aggregate_hour`,
+          select: `
+            ts,
+            open_price o,
+            high_price h,
+            low_price l,
+            close_price c
+          `,
+          where: `token='${req.params.token}' AND ts>=${t7d} AND ts<=${tch} ORDER BY ts`,
+        });
+        price7D = __entry.rows;
 
         const t0 = Math.floor(tc / 86400) * 86400; // Current daily rounded timestamp
         const t365 = t0 - 365 * 86400; // Current daily - 1 year
@@ -159,16 +170,30 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         const fees48H = parseFloat(aggregate48H[token]?.fees ?? 0);
         const fees24H = parseFloat(aggregate24H[token]?.fees ?? 0);
 
-        const priceHistory = aggregate1Y.map((item) => {
-          return <{ [key: string]: PriceOHLC }>{
-            [item.ts]: {
-              o: item.o,
-              h: item.h,
-              l: item.l,
-              c: item.c,
-            },
-          };
-        });
+        const priceHistory: { [key: string]: PriceOHLC }[] = [];
+        for (let t = t7d, i = 0; t <= tch, i < price7D.length; t += 3600) {
+          if (price7D[i].ts == t) {
+            priceHistory.push({
+              [t]: {
+                o: price7D[i].o,
+                h: price7D[i].h,
+                l: price7D[i].l,
+                c: price7D[i].c,
+              },
+            });
+            i++;
+          } else if (i > 0) {
+            priceHistory.push({
+              [t]: {
+                o: price7D[i - 1].c,
+                h: price7D[i - 1].c,
+                l: price7D[i - 1].c,
+                c: price7D[i - 1].c,
+              },
+            });
+          }
+        }
+
         const volumeHistory = aggregate1Y.map((item) => {
           return <{ [key: string]: string }>{
             [item.ts]: item.volume_value,
