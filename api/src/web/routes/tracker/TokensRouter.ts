@@ -276,6 +276,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
           contract: data.tokens[token].address,
           standard: data.tokens[token].standard,
           tokenId: data.tokens[token].tokenId,
+          decimals: data.tokens[token].decimals,
           price: {
             value: new BigNumber(lastAggregateCH[token]?.close_price ?? 0).toString(),
             change24H: percentageChange(price24H, priceCH), // (closing price 24 hrs ago, last closing price)

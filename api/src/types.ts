@@ -40,6 +40,7 @@ export interface Token {
   address: string;
   standard: string;
   tokenId: number;
+  decimals: number;
 }
 
 export interface Data {
@@ -202,6 +203,7 @@ export interface TokenTrackerResponse {
   contract?: string;
   standard: string;
   tokenId?: number;
+  decimals: number;
   price: {
     value: string;
     change24H: string;
