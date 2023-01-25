@@ -11,6 +11,8 @@ Array<{
   name: string;
   symbol: string;
   contract?: string; // Does not show up for XTZ
+  standard: string;
+  tokenId?: number;
   price: {
     value: string;
     change24H: string;
@@ -50,6 +52,8 @@ Array<{
   name: string;
   symbol: string;
   contract?: string; // Does not show up for XTZ
+  standard: string;
+  tokenId?: number;
   price: {
     value: string;
     change24H: string;

@@ -38,6 +38,8 @@ export interface Token {
   name: string;
   symbol: string;
   address: string;
+  standard: string;
+  tokenId: number;
 }
 
 export interface Data {
@@ -198,6 +200,8 @@ export interface TokenTrackerResponse {
   name: string;
   symbol: string;
   contract?: string;
+  standard: string;
+  tokenId?: number;
   price: {
     value: string;
     change24H: string;
