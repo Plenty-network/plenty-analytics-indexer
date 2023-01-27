@@ -6,8 +6,17 @@ import { Dependencies, PriceOHLC, TokenResponse } from "../../../types";
 function build({ cache, config, getData, dbClient }: Dependencies): Router {
   const router = Router();
 
-  router.get("/:token?", async (req: Request<{ token: string | undefined }>, res: Response) => {
+  interface Query {
+    historical?: string
+  }
+
+  router.get("/:token?", async (req: Request<{ token: string | undefined }, {}, {}, Query>, res: Response) => {
     try {
+      // Default query
+      if(req.query.historical === undefined || req.query.historical !== "false") {
+        req.query.historical = "true";
+      }
+
       // Fetch system wide pool and token data
       const data = await getData();
 
@@ -100,7 +109,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       let price7D = [];
       const tvlHistory = [];
 
-      if (req.params.token) {
+      if (req.params.token && req.query.historical === "true") {
         // Fetch a year's worth of aggregated data if a specific token is supplied in the params
         const _entry = await dbClient.get({
           table: `token_aggregate_day`,
@@ -210,27 +219,27 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
           price: {
             value: new BigNumber(lastAggregateCH[token]?.close_price ?? 0).toString(),
             change24H: percentageChange(price24H, priceCH), // (closing price 24 hrs ago, last closing price)
-            history: req.params.token ? priceHistory : undefined,
+            history: req.params.token && req.query.historical === "true" ? priceHistory : undefined,
           },
           volume: {
             value24H: vol24H.toString(),
             // (aggregated volume 48 hrs -> 24 hrs ago, aggregated volume 24 hrs -> now)
             change24H: percentageChange(vol48H, vol24H),
             value7D: vol7D.toString(),
-            history: req.params.token ? volumeHistory : undefined,
+            history: req.params.token && req.query.historical === "true" ? volumeHistory : undefined,
           },
           fees: {
             value24H: fees24H.toString(),
             // (aggregated fees 48 hrs -> 24 hrs ago, aggregated fees 24 hrs -> now)
             change24H: percentageChange(fees48H, fees24H),
             value7D: fees7D.toString(),
-            history: req.params.token ? feesHistory : undefined,
+            history: req.params.token && req.query.historical === "true" ? feesHistory : undefined,
           },
           tvl: {
             value: lockedValueCH.toFixed(6),
             // (tvl record 24 hrs ago, last tvl record)
             change24H: percentageChange(lockedValue24H, lockedValueCH),
-            history: req.params.token ? tvlHistory : undefined,
+            history: req.params.token && req.query.historical === "true" ? tvlHistory : undefined,
           },
         });
       }
