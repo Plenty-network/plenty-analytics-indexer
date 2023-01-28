@@ -482,9 +482,9 @@ export default class AggregateProcessor {
         // The total dollar value of token involved in the txn
         const tokenValue = price * tokenAmount;
 
-        // Fees calculated as 0.1% of stable trade value and 0.35% of volatile trade value
-        const feesAmount = txr.pair.type === PoolType.STABLE ? tokenAmount / 1000 : tokenAmount / 290;
-        const feesvalue = txr.pair.type === PoolType.STABLE ? tokenValue / 1000 : tokenValue / 290;
+        // Fees calculated as 0.1% for tez/ctez and 0.05% for remaining
+        const feesAmount = txr.pair.address === this._config.tezCtezPool ? tokenAmount / 1000 : tokenAmount / 2000;
+        const feesvalue = txr.pair.address === this._config.tezCtezPool ? tokenValue / 1000 : tokenValue / 2000;
 
         const _entry = await this._dbClient.get({
           table,
