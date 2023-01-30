@@ -125,7 +125,7 @@ function build({ cache, config, dbClient }: Dependencies): Router {
           history: feesHistory,
         },
         tvl: {
-          value: (t1LockedValue24H + t2LockedValue24H).toFixed(6),
+          value: Object.values(tvlHistory[tvlHistory.length - 1])[0],
           // (tvl record 24 hrs ago, last tvl record)
           change24H: percentageChange(t1LockedValue24H + t2LockedValue24H, t1LockedValueCH + t2LockedValueCH),
           history: tvlHistory,
