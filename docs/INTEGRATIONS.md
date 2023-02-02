@@ -27,5 +27,4 @@ Array<{
   targetVolume: string;
   poolId: string;
 }>;
-}
 ```
