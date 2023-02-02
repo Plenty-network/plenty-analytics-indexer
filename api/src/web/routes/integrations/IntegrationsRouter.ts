@@ -37,13 +37,18 @@ function build({ dbClient }: Dependencies): Router {
       // Fetch aggregated pool records between two timestamps
       async function getPoolAggregate(ts1: number, ts2: number) {
         return await dbClient.get({
-          table: `pool_aggregate_hour`,
+          table: `transaction`,
           select: `
             pool, 
-            SUM(token_1_volume) as t1volume,
-            SUM(token_2_volume) as t2volume
+            SUM(token_1_amount) as t1volume,
+            SUM(token_2_amount) as t2volume
           `,
-          where: `ts>=${ts1} AND ts<${ts2} GROUP BY pool`,
+          where: `
+            ts>=${ts1} AND ts<${ts2} 
+              AND
+            (type='swap_token_1' OR type='swap_token_2')
+            GROUP BY pool
+            `,
         });
       }
 
