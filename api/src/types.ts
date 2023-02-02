@@ -197,6 +197,23 @@ export interface PriceResponse {
 // Tracker Response types
 //========================
 
+export interface PairResponse {
+  tickerId: string;
+  base: string;
+  target: string;
+  poolId: string;
+}
+
+export interface TickerResponse {
+  tickerId: string;
+  baseCurrency: string;
+  targetCurrency: string;
+  lastPrice: string;
+  baseVolume: string;
+  targetVolume: string;
+  poolId: string;
+}
+
 export interface TokenTrackerResponse {
   name: string;
   symbol: string;

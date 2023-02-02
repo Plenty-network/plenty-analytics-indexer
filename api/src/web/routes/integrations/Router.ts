@@ -1,13 +1,11 @@
 import { Router } from "express";
-import TokensRouter from "./TokensRouter";
-import PlentyRouter from "../analytics/PlentyRouter";
+import IntegrationsRouter from "./IntegrationsRouter";
 
 import { Dependencies } from "../../../types";
 
 function build(dependencies: Dependencies): Router {
   const router = Router();
-  router.use("/tokens", TokensRouter(dependencies));
-  router.use("/plenty", PlentyRouter(dependencies));
+  router.use("/v1", IntegrationsRouter(dependencies));
   return router;
 }
 
