@@ -144,6 +144,11 @@ export interface PriceOHLC {
 
 export interface TokenResponse {
   token: string;
+  name: string;
+  contract?: string;
+  standard: string;
+  tokenId?: number;
+  decimals: number;
   price: {
     value: string;
     change24H: string;
@@ -212,43 +217,4 @@ export interface TickerResponse {
   baseVolume: string;
   targetVolume: string;
   poolId: string;
-}
-
-export interface TokenTrackerResponse {
-  name: string;
-  symbol: string;
-  contract?: string;
-  standard: string;
-  tokenId?: number;
-  decimals: number;
-  price: {
-    value: string;
-    change24H: string;
-    history?: { [key: string]: PriceOHLC }[];
-  };
-  volume: {
-    value24H: string;
-    change24H: string;
-  };
-  tvl: {
-    value: string;
-    change24H: string;
-  };
-  pairs: {
-    symbol: string;
-    contract: string;
-    exchangeLink: string;
-    price: {
-      value: string;
-      change24H: string;
-    };
-    volume: {
-      value24H: string;
-      change24H: string;
-    };
-    tvl: {
-      value: string;
-      change24H: string;
-    };
-  }[];
 }

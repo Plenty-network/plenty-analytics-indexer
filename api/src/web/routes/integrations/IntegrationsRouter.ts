@@ -1,6 +1,6 @@
 import { Response, Router } from "express";
 import { convertToMap } from "../../../utils";
-import { Dependencies, PairResponse, TickerResponse, TokenTrackerResponse } from "../../../types";
+import { Dependencies, PairResponse, TickerResponse } from "../../../types";
 
 function build({ dbClient }: Dependencies): Router {
   const router = Router();

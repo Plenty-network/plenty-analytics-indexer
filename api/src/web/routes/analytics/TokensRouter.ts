@@ -7,13 +7,13 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
   const router = Router();
 
   interface Query {
-    historical?: string
+    historical?: string;
   }
 
   router.get("/:token?", async (req: Request<{ token: string | undefined }, {}, {}, Query>, res: Response) => {
     try {
       // Default query
-      if(req.query.historical === undefined || req.query.historical !== "false") {
+      if (req.query.historical === undefined || req.query.historical !== "false") {
         req.query.historical = "true";
       }
 
@@ -216,6 +216,11 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
 
         tokens.push({
           token,
+          name: data.tokens[token].name,
+          contract: data.tokens[token].address,
+          standard: data.tokens[token].standard,
+          tokenId: data.tokens[token].tokenId,
+          decimals: data.tokens[token].decimals,
           price: {
             value: new BigNumber(lastAggregateCH[token]?.close_price ?? 0).toString(),
             change24H: percentageChange(price24H, priceCH), // (closing price 24 hrs ago, last closing price)
