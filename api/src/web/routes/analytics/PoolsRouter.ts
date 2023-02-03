@@ -122,6 +122,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         pools.push({
           pool: data.pools[pool].address,
           symbol: `${data.pools[pool].token1.symbol}/${data.pools[pool].token2.symbol}`,
+          type: data.pools[pool].type,
           volume: {
             value24H: vol24H.toFixed(6),
             // (aggregated volume 48 hrs -> 24 hrs ago, aggregated volume 24 hrs -> now)
