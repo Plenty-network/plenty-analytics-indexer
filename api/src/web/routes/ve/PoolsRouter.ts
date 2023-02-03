@@ -68,7 +68,7 @@ function build({ getData, dbClient }: Dependencies): Router {
       const pools: VEPoolResponse[] = [];
 
       // Loop through every in the system
-      for (const pool of data.pools) {
+      for (const pool of Object.keys(data.pools)) {
         // Retrieve data fields from DB entry
         const lockedValueCH =
           parseFloat(lastLockedValueCH[pool]?.l1v ?? 0) + parseFloat(lastLockedValueCH[pool]?.l2v ?? 0);

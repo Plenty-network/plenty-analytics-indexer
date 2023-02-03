@@ -44,7 +44,9 @@ export interface Token {
 }
 
 export interface Data {
-  pools: string[];
+  pools: {
+    [key: string]: { address: string; token1: Token; token2: Token };
+  };
   tokens: {
     [key: string]: Token;
   };
@@ -96,6 +98,7 @@ export interface TransactionResponse {
 
 export interface PoolResponse {
   pool: string;
+  symbol: string;
   volume: {
     value24H: string;
     change24H: string;

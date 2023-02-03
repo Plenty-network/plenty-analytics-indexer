@@ -25,7 +25,7 @@ const getDataBuilder = (cache: Cache, config: Config, dbClient: DatabaseClient) 
         }
       }
       data = {
-        pools: Object.keys(pools),
+        pools: pools,
         tokens: tokens,
       };
       cache.insert("data", data, config.ttl.data);

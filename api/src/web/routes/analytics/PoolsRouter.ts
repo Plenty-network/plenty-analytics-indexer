@@ -11,7 +11,7 @@ function build({ getData, dbClient }: Dependencies): Router {
       const data = await getData();
 
       // Check request params validity
-      if (req.params.pool && !data.pools.includes(req.params.pool)) {
+      if (req.params.pool && !data.pools[req.params.pool]) {
         res.json({ error: "Pool does not exist." });
         return;
       }
@@ -87,7 +87,7 @@ function build({ getData, dbClient }: Dependencies): Router {
       const pools: PoolResponse[] = [];
 
       // Loop through every pool/pool in the system
-      for (const pool of req.params.pool ? [req.params.pool] : data.pools) {
+      for (const pool of req.params.pool ? [req.params.pool] : Object.keys(data.pools)) {
         // Retrieve data fields from DB entry
         const lockedValueCH =
           parseFloat(lastLockedValueCH[pool]?.l1 ?? 0) + parseFloat(lastLockedValueCH[pool]?.l2 ?? 0);
@@ -120,7 +120,8 @@ function build({ getData, dbClient }: Dependencies): Router {
         });
 
         pools.push({
-          pool,
+          pool: data.pools[pool].address,
+          symbol: `${data.pools[pool].token1.symbol}/${data.pools[pool].token2.symbol}`,
           volume: {
             value24H: vol24H.toFixed(6),
             // (aggregated volume 48 hrs -> 24 hrs ago, aggregated volume 24 hrs -> now)

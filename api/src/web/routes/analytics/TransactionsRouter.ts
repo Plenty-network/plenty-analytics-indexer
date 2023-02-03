@@ -23,7 +23,7 @@ function build({ getData, dbClient }: Dependencies): Router {
         if (req.query.token) {
           res.json({ error: "Token query not allowed along with pool." });
           return;
-        } else if (!data.pools.includes(req.query.pool)) {
+        } else if (!data.pools[req.query.pool]) {
           res.json({ error: "Pool does not exist." });
           return;
         }
@@ -55,7 +55,7 @@ function build({ getData, dbClient }: Dependencies): Router {
       }
 
       if (req.query.pool) {
-        if (!data.pools.includes(req.query.pool)) {
+        if (!data.pools[req.query.pool]) {
           res.json({ error: "Pool does not exist." });
           return;
         }
