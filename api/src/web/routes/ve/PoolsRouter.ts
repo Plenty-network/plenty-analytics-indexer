@@ -1,3 +1,4 @@
+import axios from "axios";
 import { Request, Response, Router } from "express";
 import { convertToMap } from "../../../utils";
 import { Dependencies, VEPoolResponse } from "../../../types";
@@ -38,6 +39,29 @@ function build({ getData, dbClient }: Dependencies): Router {
           where: `ts>=${ts1} AND ts<${ts2} GROUP BY pool`,
         });
       }
+
+      // A really crazy override to include baking reward in fees
+      const priceData = await dbClient.get({
+        select: `close_price`,
+        table: `token_aggregate_hour`,
+        where: `
+        token='XTZ'
+          AND
+        ts=(SELECT MAX(ts) FROM token_aggregate_hour WHERE token='XTZ' AND ts<=${tch})
+        `,
+      });
+      const pricingLevel = (await axios.get(`https://api.tzkt.io/v1/blocks/${new Date(tc * 1000).toUTCString()}/level`))
+        .data;
+      const tezTotal =
+        parseInt(
+          (
+            await axios.get(
+              `https://api.tzkt.io/v1/contracts/KT1CAYNQGvYSF5UvHK21grMrKpe2563w9UcX/storage?level=${pricingLevel}`
+            )
+          ).data.xtzFee
+        ) /
+        10 ** 6;
+      const tezValue = parseFloat(priceData.rows[0].close_price);
 
       // Fetch pool locked value (<=) to supplied timestamp
       async function getLockedValueAll(ts: number) {
@@ -109,8 +133,18 @@ function build({ getData, dbClient }: Dependencies): Router {
             token2: parseFloat(aggregate7D[pool]?.t2fees ?? 0).toFixed(6),
           },
           feesEpoch: {
-            value: feesEpoch.toFixed(6),
-            token1: parseFloat(aggregateEpoch[pool]?.t1fees ?? 0).toFixed(6),
+            value:
+              pool === `KT1CAYNQGvYSF5UvHK21grMrKpe2563w9UcX`
+                ? (
+                    feesEpoch -
+                    parseFloat(aggregateEpoch[pool]?.t1fees ?? 0) * tezValue +
+                    (tezTotal + tezValue)
+                  ).toFixed(6)
+                : feesEpoch.toFixed(6),
+            token1:
+              pool == `KT1CAYNQGvYSF5UvHK21grMrKpe2563w9UcX`
+                ? tezTotal.toFixed(6)
+                : parseFloat(aggregateEpoch[pool]?.t1fees ?? 0).toFixed(6),
             token2: parseFloat(aggregateEpoch[pool]?.t2fees ?? 0).toFixed(6),
           },
           tvl: {
