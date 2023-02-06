@@ -62,7 +62,10 @@ function build({ dbClient }: Dependencies): Router {
             t.token_2_amount t2amount
           FROM (
             SELECT MAX(ts) mts, pool
-            FROM transaction WHERE ts<=${ts} GROUP BY pool
+            FROM transaction WHERE ts<=${ts} 
+              AND
+            (type='swap_token_1' OR type='swap_token_2')
+            GROUP BY pool
           ) r
           JOIN transaction t ON 
             r.pool=t.pool AND r.mts=t.ts
