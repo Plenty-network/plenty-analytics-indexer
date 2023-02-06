@@ -213,7 +213,7 @@ export interface PairResponse {
   poolId: string;
 }
 
-export interface TickerResponse {
+export interface TickerResponseV1 {
   tickerId: string;
   baseCurrency: string;
   targetCurrency: string;
@@ -221,4 +221,12 @@ export interface TickerResponse {
   baseVolume: string;
   targetVolume: string;
   poolId: string;
+}
+
+export interface TickerResponseV2 {
+  market: string;
+  base: string;
+  quote: string;
+  price_quote: string;
+  volume_base: string;
 }

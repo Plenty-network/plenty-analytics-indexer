@@ -1,32 +1,9 @@
 import { Response, Router } from "express";
 import { convertToMap } from "../../../utils";
-import { Dependencies, PairResponse, TickerResponse } from "../../../types";
+import { Dependencies, TickerResponseV2 } from "../../../types";
 
 function build({ dbClient }: Dependencies): Router {
   const router = Router();
-
-  router.get("/pairs", async (_, res: Response) => {
-    try {
-      const allPairs = await dbClient.raw(`
-        SELECT * FROM data;
-      `);
-
-      const pairs: PairResponse[] = [];
-      allPairs.rows.forEach((pair) =>
-        pairs.push({
-          tickerId: `${pair.token_1}/${pair.token_2}`,
-          base: pair.token_1,
-          target: pair.token_2,
-          poolId: pair.pool,
-        })
-      );
-
-      res.json(pairs).status(200);
-    } catch (err: any) {
-      res.status(500).json({ error: "INTERNAL_SERVER_ERROR" });
-      console.error(err.message);
-    }
-  });
 
   router.get("/tickers", async (_, res: Response) => {
     try {
@@ -40,8 +17,7 @@ function build({ dbClient }: Dependencies): Router {
           table: `transaction`,
           select: `
             pool, 
-            SUM(token_1_amount) as t1volume,
-            SUM(token_2_amount) as t2volume
+            SUM(token_1_amount) as t1volume
           `,
           where: `
             ts>=${ts1} AND ts<${ts2} 
@@ -74,16 +50,14 @@ function build({ dbClient }: Dependencies): Router {
       const poolAggregate24H = convertToMap((await getPoolAggregate(t24h, tch)).rows, "pool");
       const pairWiseCH = convertToMap((await getPairWisePrice(tch)).rows, "pool");
 
-      const tickers: TickerResponse[] = [];
+      const tickers: TickerResponseV2[] = [];
       Object.keys(pairWiseCH).forEach((pool) => {
         tickers.push({
-          tickerId: `${pairWiseCH[pool].token_1}/${pairWiseCH[pool].token_2}`,
-          baseCurrency: pairWiseCH[pool].token_1,
-          targetCurrency: pairWiseCH[pool].token_2,
-          lastPrice: (parseFloat(pairWiseCH[pool].t2amount) / parseFloat(pairWiseCH[pool].t1amount)).toFixed(12),
-          baseVolume: poolAggregate24H[pool]?.t1volume ?? "0",
-          targetVolume: poolAggregate24H[pool]?.t2volume ?? "0",
-          poolId: pool,
+          market: `${pairWiseCH[pool].token_1}-${pairWiseCH[pool].token_2}`,
+          base: pairWiseCH[pool].token_1,
+          quote: pairWiseCH[pool].token_2,
+          price_quote: (parseFloat(pairWiseCH[pool].t2amount) / parseFloat(pairWiseCH[pool].t1amount)).toFixed(12),
+          volume_base: poolAggregate24H[pool]?.t1volume ?? "0",
         });
       });
 
