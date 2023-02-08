@@ -8,13 +8,17 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
 
   interface Query {
     historical?: string;
+    priceHistory?: string;
   }
 
   router.get("/:token?", async (req: Request<{ token: string | undefined }, {}, {}, Query>, res: Response) => {
     try {
-      // Default query
+      // Default queries
       if (req.query.historical === undefined || req.query.historical !== "false") {
         req.query.historical = "true";
+      }
+      if (req.query.priceHistory === undefined || req.query.priceHistory !== "day") {
+        req.query.priceHistory = "hour";
       }
 
       // Fetch system wide pool and token data
@@ -31,7 +35,8 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       const t48h = tch - 48 * 3600; // Current hourly - 48 hours
       const t24h = tch - 24 * 3600; // Current hourly - 24 hours
       const t7d = tch - 7 * 86400; // Current hourly - 7 days
-      const t1y = tch - 365 * 86400; // Current hourly - 1 year
+      const t30d = tch - 30 * 86400; // Current hourly - 30 days
+      const t1y = Math.floor((tch - 365 * 86400) / 86400) * 86400; // Current hourly - 1 year
 
       // Fetch aggregated token records between two timestamps
       async function getAggregate(ts1: number, ts2: number) {
@@ -95,6 +100,8 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
 
       // Last aggregated data in the form of { token-symbol: { close-price } }
       const lastAggregate24H = convertToMap((await getClosePriceAggregate(t24h)).rows, "token");
+      const lastAggregate7D = convertToMap((await getClosePriceAggregate(t7d)).rows, "token");
+      const lastAggregate30D = convertToMap((await getClosePriceAggregate(t30d)).rows, "token");
       const lastAggregateCH = convertToMap((await getClosePriceAggregate(tch)).rows, "token");
 
       // Last locked values across token 1 of all pools in the form { token-symbol: { sum } }
@@ -106,7 +113,7 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
       const t2LockedValueCH = convertToMap((await getLockedValueAll(tch, 2)).rows, "token_2");
 
       let aggregate1Y = [];
-      let price7D = [];
+      let historicalPrices = [];
       const tvlHistory = [];
 
       if (req.params.token && req.query.historical === "true") {
@@ -122,9 +129,9 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         });
         aggregate1Y = _entry.rows;
 
-        // Fetch hourly candles for 7 days
+        // Fetch historical price candles
         const __entry = await dbClient.get({
-          table: `token_aggregate_hour`,
+          table: `token_aggregate_${req.query.priceHistory}`,
           select: `
             ts,
             open_price o,
@@ -132,9 +139,11 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
             low_price l,
             close_price c
           `,
-          where: `token='${req.params.token}' AND ts>=${t7d} AND ts<=${tch} ORDER BY ts`,
+          where: `token='${req.params.token}' AND ts>=${
+            req.query.priceHistory === "hour" ? t7d : t1y
+          } AND ts<=${tch} ORDER BY ts`,
         });
-        price7D = __entry.rows;
+        historicalPrices = __entry.rows;
 
         const t0 = Math.floor(tc / 86400) * 86400; // Current daily rounded timestamp
         const t365 = t0 - 365 * 86400; // Current daily - 1 year
@@ -164,6 +173,8 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         // Retrieve data fields from DB entry
         const priceCH = parseFloat(lastAggregateCH[token]?.close_price ?? 0);
         const price24H = parseFloat(lastAggregate24H[token]?.close_price ?? 0);
+        const price7D = parseFloat(lastAggregate7D[token]?.close_price ?? 0);
+        const price30D = parseFloat(lastAggregate30D[token]?.close_price ?? 0);
 
         const lockedValueCH =
           parseFloat(t1LockedValueCH[token]?.sum ?? 0) + parseFloat(t2LockedValueCH[token]?.sum ?? 0);
@@ -180,24 +191,28 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
         const fees24H = parseFloat(aggregate24H[token]?.fees ?? 0);
 
         const priceHistory: { [key: string]: PriceOHLC }[] = [];
-        for (let t = t7d, i = 0; t <= tch, i < price7D.length; t += 3600) {
-          if (price7D[i].ts == t) {
+        for (
+          let t = req.query.priceHistory === "hour" ? t7d : t1y, i = 0;
+          t <= tch, i < historicalPrices.length;
+          t += req.query.priceHistory === "hour" ? 3600 : 86400
+        ) {
+          if (historicalPrices[i].ts == t) {
             priceHistory.push({
               [t]: {
-                o: price7D[i].o,
-                h: price7D[i].h,
-                l: price7D[i].l,
-                c: price7D[i].c,
+                o: historicalPrices[i].o,
+                h: historicalPrices[i].h,
+                l: historicalPrices[i].l,
+                c: historicalPrices[i].c,
               },
             });
             i++;
           } else if (i > 0) {
             priceHistory.push({
               [t]: {
-                o: price7D[i - 1].c,
-                h: price7D[i - 1].c,
-                l: price7D[i - 1].c,
-                c: price7D[i - 1].c,
+                o: historicalPrices[i - 1].c,
+                h: historicalPrices[i - 1].c,
+                l: historicalPrices[i - 1].c,
+                c: historicalPrices[i - 1].c,
               },
             });
           }
@@ -224,6 +239,8 @@ function build({ cache, config, getData, dbClient }: Dependencies): Router {
           price: {
             value: new BigNumber(lastAggregateCH[token]?.close_price ?? 0).toString(),
             change24H: percentageChange(price24H, priceCH), // (closing price 24 hrs ago, last closing price)
+            change7D: percentageChange(price7D, priceCH), // (closing price 7 days ago, last closing price)
+            change30D: percentageChange(price30D, priceCH), // (closing price 30 days ago, last closing price)
             history: req.params.token && req.query.historical === "true" ? priceHistory : undefined,
           },
           volume: {

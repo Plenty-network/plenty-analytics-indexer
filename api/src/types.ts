@@ -156,6 +156,8 @@ export interface TokenResponse {
   price: {
     value: string;
     change24H: string;
+    change7D: string;
+    change30D: string;
     history?: { [key: string]: PriceOHLC }[];
   };
   volume: {
