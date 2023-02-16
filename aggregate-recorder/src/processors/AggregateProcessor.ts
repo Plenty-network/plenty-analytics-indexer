@@ -243,22 +243,22 @@ export default class AggregateProcessor {
           type = TransactionType.SWAP_TOKEN_2; // token 2 is swapped for token 1
         }
       } else if (
-        txn.parameter.value.requiredTokenAddress === pair.token2.data.address &&
-        txn.parameter.value.requiredTokenId === (pair.token2.data.tokenId?.toString() ?? "0")
+        txn.parameter.value.requiredTokenAddress === pair.token1.data.address &&
+        txn.parameter.value.requiredTokenId === (pair.token1.data.tokenId?.toString() ?? "0")
       ) {
-        type = TransactionType.SWAP_TOKEN_1;
-      } else {
         type = TransactionType.SWAP_TOKEN_2;
+      } else {
+        type = TransactionType.SWAP_TOKEN_1;
       }
 
       pair.transactionType = type;
 
-      // For volatile pairs, use the token reserves (token-pool) to calculate price
-      if (pair.type === PoolType.VOLATILE) {
-        [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.STORAGE);
-      } else {
+      if (pair.type === PoolType.STABLE) {
         // For stable pairs, use the swap values (token-amount), since there is negligible slippage
         [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.SWAP);
+      } else {
+        // For volatile pairs, use the token reserves (token-pool) to calculate price
+        [token1Price, token2Price] = await this._calculatePrice(ts, pair, PricingType.STORAGE);
       }
 
       // Set the prices in the pair object
@@ -710,7 +710,7 @@ export default class AggregateProcessor {
     switch (token.standard) {
       case TokenStandard.TEZ: {
         // Keep looping until a transaction with non-zero tez amount is found.
-        // This is valid only for tez-ctez pool
+        // This is valid only for tez pools
         while (true) {
           if (operation[index].amount !== 0) {
             return new BigNumber(operation[index].amount).dividedBy(10 ** token.decimals).toNumber();
