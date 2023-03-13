@@ -114,6 +114,7 @@ export default class AggregateProcessor {
                 amount: token2Amount,
                 price: 0,
               },
+              fees: pool.fees,
             };
 
             // Check if the txn is already processed in the past
@@ -344,16 +345,14 @@ export default class AggregateProcessor {
       // Possible volume and fees for token 1
       const token1Amount = txr.pair.token1.amount;
       const token1Value = token1Amount * txr.pair.token1.price;
-      const token1FeesAmount =
-        txr.pair.address === this._config.tezCtezPool ? token1Amount / 1000 : token1Amount / 2000;
-      const token1FeesValue = txr.pair.address === this._config.tezCtezPool ? token1Value / 1000 : token1Value / 2000;
+      const token1FeesAmount = token1Amount / txr.pair.fees;
+      const token1FeesValue = token1Value / txr.pair.fees;
 
       // Possible volume and fees for token 2
       const token2Amount = txr.pair.token2.amount;
       const token2Value = token2Amount * txr.pair.token2.price;
-      const token2FeesAmount =
-        txr.pair.address === this._config.tezCtezPool ? token2Amount / 1000 : token2Amount / 2000;
-      const token2FeesValue = txr.pair.address === this._config.tezCtezPool ? token2Value / 1000 : token2Value / 2000;
+      const token2FeesAmount = token2Amount / txr.pair.fees;
+      const token2FeesValue = token2Value / txr.pair.fees;
 
       const _entry = await this._dbClient.get({
         table,
@@ -482,9 +481,8 @@ export default class AggregateProcessor {
         // The total dollar value of token involved in the txn
         const tokenValue = price * tokenAmount;
 
-        // Fees calculated as 0.1% for tez/ctez and 0.05% for remaining
-        const feesAmount = txr.pair.address === this._config.tezCtezPool ? tokenAmount / 1000 : tokenAmount / 2000;
-        const feesvalue = txr.pair.address === this._config.tezCtezPool ? tokenValue / 1000 : tokenValue / 2000;
+        const feesAmount = tokenAmount / txr.pair.fees;
+        const feesvalue = tokenValue / txr.pair.fees;
 
         const _entry = await this._dbClient.get({
           table,

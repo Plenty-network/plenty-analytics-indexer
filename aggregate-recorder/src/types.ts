@@ -138,6 +138,7 @@ export interface Pool {
   address: string;
   token1: Token;
   token2: Token;
+  fees: number;
   type: PoolType;
 }
 
@@ -173,6 +174,7 @@ export interface Pair {
     amount: number;
     price: number;
   };
+  fees: number;
   transactionType?: TransactionType;
 }
 
