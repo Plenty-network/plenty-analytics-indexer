@@ -683,10 +683,10 @@ export default class AggregateProcessor {
         token2Price = new BigNumber(1);
         token1Price = new BigNumber(token2Base).dividedBy(token1Base);
       } // Price in terms of CTez
-      else if (pair.token1.data.symbol === "CTez") {
+      else if (constants.SECONDARY_PRICING_TOKENS.includes(pair.token1.data.symbol)) {
         token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
         token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
-      } else if (pair.token2.data.symbol === "CTez") {
+      } else if (constants.SECONDARY_PRICING_TOKENS.includes(pair.token2.data.symbol)) {
         token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
         token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
       }
