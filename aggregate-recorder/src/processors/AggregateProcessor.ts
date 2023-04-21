@@ -664,7 +664,7 @@ export default class AggregateProcessor {
 
   /**
    * @description Calculate the spot price of a token pair at a given timestamp
-   * @description Does not price tokens not paired with dollar stables or CTez
+   * @description Does not price tokens not paired with dollar stables or trusted tokens
    */
   private async _calculatePrice(ts: number, pair: Pair, type: PricingType): Promise<[BigNumber, BigNumber]> {
     try {
@@ -682,7 +682,7 @@ export default class AggregateProcessor {
       } else if (constants.DOLLAR_STABLECOINS.includes(pair.token2.data.symbol)) {
         token2Price = new BigNumber(1);
         token1Price = new BigNumber(token2Base).dividedBy(token1Base);
-      } // Price in terms of CTez
+      } // Price in terms of other trusted tokens
       else if (constants.SECONDARY_PRICING_TOKENS.includes(pair.token1.data.symbol)) {
         token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
         token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
