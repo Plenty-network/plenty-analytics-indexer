@@ -603,7 +603,7 @@ export default class AggregateProcessor {
   private async _recordSpotPrice(ts: number, token: Token, price: BigNumber): Promise<void> {
     try {
       // Do not record dollar stablecoins
-      if (constants.DOLLAR_STABLECOINS.includes(token.symbol)) return;
+      if (constants.PRICING_TREE[0].includes(token.symbol)) return;
 
       const _entry = await this._dbClient.get({
         table: "price_spot",
@@ -675,20 +675,21 @@ export default class AggregateProcessor {
       const token1Base = type === PricingType.STORAGE ? pair.token1.pool : pair.token1.amount;
       const token2Base = type === PricingType.STORAGE ? pair.token2.pool : pair.token2.amount;
 
-      // If one of the tokens is a stablecoin, then use it as the dollar base.
-      if (constants.DOLLAR_STABLECOINS.includes(pair.token1.data.symbol)) {
-        token1Price = new BigNumber(1);
-        token2Price = new BigNumber(token1Base).dividedBy(token2Base);
-      } else if (constants.DOLLAR_STABLECOINS.includes(pair.token2.data.symbol)) {
-        token2Price = new BigNumber(1);
-        token1Price = new BigNumber(token2Base).dividedBy(token1Base);
-      } // Price in terms of other trusted tokens
-      else if (constants.SECONDARY_PRICING_TOKENS.includes(pair.token1.data.symbol)) {
-        token1Price = await this._getPriceAt(ts, pair.token1.data.symbol);
-        token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
-      } else if (constants.SECONDARY_PRICING_TOKENS.includes(pair.token2.data.symbol)) {
-        token2Price = await this._getPriceAt(ts, pair.token2.data.symbol);
-        token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
+      // Priority wise pricing:
+      // USDt, USCD.e -> $1
+      // CTez -> $-
+      // kUSD, uUSD -> $-
+      // YOU -> $-
+
+      // Remaining tokens in order of priority
+      for (let i = 0; i < constants.PRICING_TREE.length; i++) {
+        if (constants.PRICING_TREE[i].includes(pair.token1.data.symbol)) {
+          token2Price = new BigNumber(token1Base).multipliedBy(token1Price).dividedBy(token2Base);
+          break;
+        } else if (constants.PRICING_TREE[i].includes(pair.token2.data.symbol)) {
+          token1Price = new BigNumber(token2Base).multipliedBy(token2Price).dividedBy(token1Base);
+          break;
+        }
       }
 
       return [token1Price, token2Price];
@@ -803,7 +804,7 @@ export default class AggregateProcessor {
    * @description fetches the spot price of a token at a specific timestamp
    */
   private async _getPriceAt(ts: number, tokenSymbol: string): Promise<BigNumber> {
-    if (constants.DOLLAR_STABLECOINS.includes(tokenSymbol)) {
+    if (constants.PRICING_TREE[0].includes(tokenSymbol)) {
       return new BigNumber(1);
     } else {
       try {

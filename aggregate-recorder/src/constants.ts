@@ -14,6 +14,5 @@ export const constants = {
   NORMAL_SWAP_ENTRYPOINT: "Swap",
   TEZ_SWAP_ENTRYPOINT: "tez_to_ctez",
   CTEZ_SWAP_ENTRYPOINT: "ctez_to_tez",
-  DOLLAR_STABLECOINS: ["USDC.e", "USDt"],
-  SECONDARY_PRICING_TOKENS: ["CTez", "uUSD", "YOU", "kUSD"],
+  PRICING_TREE: [["USDt", "USDC.e"], ["CTez"], ["uUSD", "kUSD"], ["YOU"]],
 };
