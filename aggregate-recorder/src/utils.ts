@@ -1,4 +1,6 @@
+import fs from "fs";
 import axios from "axios";
+import { config } from "./config";
 
 // Retries axios connection every 3 seconds
 export const addRetryToAxios = () => {
@@ -10,4 +12,19 @@ export const addRetryToAxios = () => {
     `);
     return axios.request(error.config);
   });
+};
+
+export const getLastLevel = (): number => {
+  if (!fs.existsSync(`/data/level.json`)) {
+    return parseInt(config.indexingStart);
+  }
+  return JSON.parse(fs.readFileSync(`/data/level.json`).toString()).level;
+};
+
+export const recordLastLevel = (level: number) => {
+  console.log(`Recorded level: ${level}`);
+  if (!fs.existsSync(`/data`)) {
+    fs.mkdirSync("/data");
+  }
+  fs.writeFileSync(`/data/level.json`, JSON.stringify({ level }));
 };

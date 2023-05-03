@@ -16,8 +16,7 @@ export default class TzktProvider {
         params: {
           target: params.contract,
           ["entrypoint.in"]: params.entrypoint.join(),
-          ["level.ge"]: params.firstLevel,
-          ["level.le"]: params.lastLevel,
+          level: params.level,
           select: params.select,
           limit: params.limit,
           offset: params.offset,

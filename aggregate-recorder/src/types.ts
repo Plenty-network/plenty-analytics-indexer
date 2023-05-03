@@ -72,8 +72,7 @@ export interface DatabaseUpdateParams {
 export interface GetTransactionParameters {
   contract: string;
   entrypoint: string[];
-  firstLevel: number;
-  lastLevel: number;
+  level: number;
   limit: number;
   offset: number;
   select: string;

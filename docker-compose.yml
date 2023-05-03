@@ -40,6 +40,8 @@ services:
       CONFIG_URL: "${CONFIG_URL}"
       TEZ_CTEZ_POOL: "${TEZ_CTEZ_POOL}"
       INDEXING_START: "${INDEXING_START}"
+    volumes:
+      - ./data:/data
 
   api:
     build: ./api

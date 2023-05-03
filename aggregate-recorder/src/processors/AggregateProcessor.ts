@@ -18,6 +18,7 @@ import {
   TransactionRecord,
 } from "../types";
 import { constants } from "../constants";
+import { getLastLevel, recordLastLevel } from "../utils";
 
 BigNumber.set({ EXPONENTIAL_AT: 36 });
 BigNumber.set({ DECIMAL_PLACES: 12 });
@@ -27,7 +28,6 @@ export default class AggregateProcessor {
   private _dbClient: DatabaseClient;
   private _tkztProvider: TzktProvider;
   private _getData: () => Promise<Data>;
-  private _lastLevel: number;
 
   constructor({ config, dbClient, tzktProvider, getData }: Dependecies) {
     this._config = config;
@@ -37,42 +37,39 @@ export default class AggregateProcessor {
   }
 
   async process(lastLevel: number): Promise<void> {
-    // Last level received by the block-watcher
-    this._lastLevel = lastLevel;
-
     const data = await this._getData();
 
-    let currentPool = "";
-    let currentLevel = 0;
-    let currentOperation = "";
+    let level;
+    let currentPool;
+    let currentOperation;
 
     try {
-      for (const pool of Object.keys(data.pools)) {
-        // Fetch hashes of all operations on the pool that involve a swap
-        const operationHashes = await this._getOperationHashes(pool);
+      for (level = getLastLevel() + 1; level <= lastLevel; level++) {
+        for (const pool of Object.keys(data.pools)) {
+          // Fetch hashes of all operations on the pool that involve a swap at a level
+          const operationHashes = await this._getOperationHashes(pool, level);
 
-        // Locally record current pool being processed for error logging
-        currentPool = pool;
+          // Locally record current pool being processed for error logging
+          currentPool = pool;
 
-        for (const hash of operationHashes) {
-          // Fetch individual operations and process them
-          const operation = await this._tkztProvider.getOperation(hash);
+          for (const hash of operationHashes) {
+            // Fetch individual operations and process them
+            const operation = await this._tkztProvider.getOperation(hash);
 
-          // Locally record current level being process for error logging
-          currentLevel = operation[0].level;
-          currentOperation = hash;
+            // Locally record current level being process for error logging
+            currentOperation = hash;
 
-          // Record the indexed level
-          await this._recordLastIndexed(data.pools[pool], operation[0].level);
-          // Handle the relevant transactions in the operation object
-          await this._processOperation(operation, data.pools[pool]);
+            // Handle the relevant transactions in the operation object
+            await this._processOperation(operation, data.pools[pool]);
+          }
         }
+        recordLastLevel(level);
       }
     } catch (err) {
       throw new Error(`
         Error: ${err.message},\n
         Last Pool: ${currentPool},\n
-        Last Level: ${currentLevel}\n
+        Last Level: ${level}\n
         Last opHash: ${currentOperation}\n
       `);
     }
@@ -629,35 +626,6 @@ export default class AggregateProcessor {
     }
   }
 
-  /**
-   * @description inserts the last processed level into the db
-   */
-  private async _recordLastIndexed(pool: Pool, level: number): Promise<void> {
-    try {
-      const _entry = await this._dbClient.get({
-        select: "*",
-        table: "last_indexed",
-        where: `pool='${pool.address}'`,
-      });
-
-      if (_entry.rowCount !== 0) {
-        await this._dbClient.update({
-          table: "last_indexed",
-          set: `level=${level}`,
-          where: `pool='${pool.address}'`,
-        });
-      } else {
-        await this._dbClient.insert({
-          table: "last_indexed",
-          columns: `(pool, level)`,
-          values: `('${pool.address}', ${level})`,
-        });
-      }
-    } catch (err) {
-      throw err;
-    }
-  }
-
   //===================
   // Value calculators
   //===================
@@ -768,9 +736,8 @@ export default class AggregateProcessor {
   /**
    * @description fetches the hashes of swap and liquidity operations on the pool
    */
-  private async _getOperationHashes(poolAddress: string): Promise<string[]> {
+  private async _getOperationHashes(poolAddress: string, level: number): Promise<string[]> {
     try {
-      const [firstLevel, lastLevel] = await this._getIndexingLevels(poolAddress);
       let offset = 0;
       let operationHashes: string[] = [];
       while (true) {
@@ -781,8 +748,7 @@ export default class AggregateProcessor {
             ...constants.ADD_LIQUIDITY_ENTRYPOINTS,
             ...constants.REMOVE_LIQUIDITY_ENTRYPOINS,
           ],
-          firstLevel,
-          lastLevel,
+          level,
           limit: this._config.tzktLimit,
           offset,
           select: "hash",
@@ -825,27 +791,6 @@ export default class AggregateProcessor {
       } catch (err) {
         throw err;
       }
-    }
-  }
-
-  /**
-   * @description returns the level interval between which the pool swaps need to be indexed.
-   * The first level is the level at which USDC.e-ctez pair had the first swap.
-   */
-  private async _getIndexingLevels(poolAddress: string): Promise<[number, number]> {
-    try {
-      const _entry = await this._dbClient.get({
-        table: "last_indexed",
-        select: "level",
-        where: `pool='${poolAddress}'`,
-      });
-      if (_entry.rowCount === 0) {
-        return [parseInt(this._config.indexingStart), this._lastLevel];
-      } else {
-        return [parseInt(_entry.rows[0].level) + 1, this._lastLevel];
-      }
-    } catch (err) {
-      throw err;
     }
   }
 }
