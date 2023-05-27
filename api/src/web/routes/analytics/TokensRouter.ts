@@ -64,11 +64,15 @@ function build({ getData, dbClient }: Dependencies): Router {
 
       // Returns the locked value
       async function getLockedValueHour(ts: number) {
-        return await dbClient.get({
-          table: `token_aggregate_hour`,
-          select: `token, locked_value as locked`,
-          where: `ts=(SELECT MAX(ts) FROM token_aggregate_hour WHERE ts<=${ts})`,
-        });
+        return await dbClient.raw(`
+          SELECT t.token, t.locked_value as locked
+            FROM (
+              SELECT MAX(ts) mts, token 
+              FROM token_aggregate_hour WHERE ts<=${ts} GROUP BY token
+            ) r
+            JOIN token_aggregate_hour t ON
+              t.token=r.token AND t.ts=r.mts;
+        `);
       }
 
       // Aggregated data in the form of { token-symbol: { volume, fees } }

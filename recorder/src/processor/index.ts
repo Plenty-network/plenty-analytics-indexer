@@ -150,30 +150,28 @@ export default class AggregateProcessor {
               plentyV2Txn.txnType = TransactionType.ADD_LIQUIDITY;
             }
 
-            const oldReserveToken1Value =
+            const oldReserveToken1 =
               plentyV2Txn.txnType === TransactionType.SWAP_TOKEN_1 ||
               plentyV2Txn.txnType === TransactionType.ADD_LIQUIDITY
-                ? token1Reserve.minus(token1Amount).multipliedBy(oldToken1Price)
-                : token1Reserve
-                    .plus(token1Amount)
-                    .multipliedBy(oldToken1Price)
-                    .plus(token2Reserve.minus(token1Amount).multipliedBy(oldToken1Price));
-            const oldReserveToken2Value =
+                ? token1Reserve.minus(token1Amount)
+                : token1Reserve.plus(token1Amount);
+
+            const oldReserveToken2 =
               plentyV2Txn.txnType === TransactionType.SWAP_TOKEN_2 ||
               plentyV2Txn.txnType === TransactionType.ADD_LIQUIDITY
-                ? token1Reserve.minus(token2Amount).multipliedBy(oldToken2Price)
-                : token2Reserve
-                    .plus(token2Amount)
-                    .multipliedBy(oldToken2Price)
-                    .plus(token2Reserve.minus(token2Amount).multipliedBy(oldToken2Price));
+                ? token2Reserve.minus(token2Amount)
+                : token2Reserve.plus(token2Amount);
+
+            const oldReserveToken1Value = oldReserveToken1.multipliedBy(oldToken1Price);
+            const oldReserveToken2Value = oldReserveToken2.multipliedBy(oldToken2Price);
 
             await this._recordTransaction(plentyV2Txn);
-            await this._recordToken(plentyV2Txn, Period.HOUR);
-            await this._recordToken(plentyV2Txn, Period.DAY);
-            await this._recordPool(plentyV2Txn, Period.HOUR);
-            await this._recordPool(plentyV2Txn, Period.DAY);
+            await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
+            await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
             await this._recordPlenty(plentyV2Txn, oldReserveToken1Value.plus(oldReserveToken2Value), Period.HOUR);
             await this._recordPlenty(plentyV2Txn, oldReserveToken1Value.plus(oldReserveToken2Value), Period.DAY);
+            await this._recordPool(plentyV2Txn, Period.HOUR);
+            await this._recordPool(plentyV2Txn, Period.DAY);
           }
         }
       }
@@ -257,7 +255,7 @@ export default class AggregateProcessor {
             locked_value
           )`,
           values: `(
-            ${txn.timestamp},
+            ${ts},
             '${txn.pool.address}',
             ${isToken1Swap ? txn.txnAmounts.token1.toString() : 0},
             ${isToken2Swap ? txn.txnAmounts.token2.toString() : 0},
@@ -302,7 +300,7 @@ export default class AggregateProcessor {
             },
             token_1_fees=${isToken1Swap ? _entryToken1Fees.plus(txn.txnFees.token1) : _entryToken1Fees.toString()},
             token_2_fees=${isToken2Swap ? _entryToken2Fees.plus(txn.txnFees.token2) : _entryToken2Fees.toString()},
-            token_2_fees_value=${
+            fees_value=${
               isToken1Swap
                 ? _entryFeesValue.plus(txn.txnFeesValue.token1).toString()
                 : isToken2Swap
@@ -324,17 +322,26 @@ export default class AggregateProcessor {
     }
   }
 
-  private async _recordToken(txn: PlentyV2Transaction, period: Period): Promise<void> {
+  private async _recordToken(txn: PlentyV2Transaction, oldPoolReserve: any, period: Period): Promise<void> {
     try {
       const table = `token_aggregate_${period.toLowerCase()}`;
 
       // Get the start timestamp (UTC) of the hour/day in which txn timestamp is present
       const ts =
         period === Period.HOUR ? Math.floor(txn.timestamp / 3600) * 3600 : Math.floor(txn.timestamp / 86400) * 86400;
-      const tsLast = ts - (period === Period.HOUR ? 3600 : 86400);
 
       // Represents token1 and token2
       const arr: [1, 2] = [1, 2];
+
+      // Is the first reserve count added to the aggregate tvl
+      const isFirstReserveLoaded =
+        (
+          await this._dbClient.get({
+            table: "pool_aggregate_day",
+            select: "*",
+            where: `pool='${txn.pool.address}'`,
+          })
+        ).rowCount !== 0;
 
       // Iterate through both tokens
       for (const N of arr) {
@@ -356,18 +363,20 @@ export default class AggregateProcessor {
           const _entryLast = await this._dbClient.get({
             table,
             select: "*",
-            where: `ts=(SELECT MAX(ts) FROM ${table} WHERE token='${tokenSymbol}' AND ts<=${tsLast})`,
+            where: `
+              token='${tokenSymbol}' 
+                AND 
+              ts=(SELECT MAX(ts) FROM ${table} WHERE token='${tokenSymbol}' AND ts<${ts})`,
           });
 
-          let totalReserve = new BigNumber(0);
+          let currentReserve = new BigNumber(0);
           if (_entryLast.rowCount !== 0) {
-            totalReserve = new BigNumber(_entryLast.rows[0].locked);
-          } else {
-            totalReserve =
-              txn.txnType === TransactionType.ADD_LIQUIDITY || txn.txnType === TransactionType[`SWAP_TOKEN_${N}`]
-                ? txn.reserves[`token${N}`].minus(txn.txnAmounts[`token${N}`])
-                : txn.reserves[`token${N}`].plus(txn.txnAmounts[`token${N}`]);
+            currentReserve = new BigNumber(_entryLast.rows[0].locked);
           }
+
+          const finalReserve = isFirstReserveLoaded
+            ? currentReserve.minus(oldPoolReserve[`token${N}`]).plus(txn.reserves[`token${N}`])
+            : currentReserve.plus(txn.reserves[`token${N}`]);
 
           // Set OHLC price as the current price and carry over the locked value from previous entry.
           // Volume and fees is set to > 0 only when the token is being swapped in
@@ -393,21 +402,13 @@ export default class AggregateProcessor {
             ${price.toString()}, 
             ${price.toString()}, 
             ${price.toString()}, 
-            ${price.toString()}, 
+            ${price.toString()},
             ${isSwapIn ? txn.txnAmounts[`token${N}`].toString() : 0},
             ${isSwapIn ? txn.txnValue[`token${N}`].toString() : 0},
             ${isSwapIn ? txn.txnFees[`token${N}`].toString() : 0},
             ${isSwapIn ? txn.txnFeesValue[`token${N}`].toString() : 0},
-            ${
-              txn.txnType === TransactionType.ADD_LIQUIDITY || isSwapIn
-                ? totalReserve.plus(txn.txnAmounts[`token${N}`]).toString()
-                : totalReserve.minus(txn.txnAmounts[`token${N}`]).toString()
-            },
-            ${
-              txn.txnType === TransactionType.ADD_LIQUIDITY || isSwapIn
-                ? totalReserve.plus(txn.txnAmounts[`token${N}`]).multipliedBy(price).toString()
-                : totalReserve.minus(txn.txnAmounts[`token${N}`]).multipliedBy(price).toString()
-            }
+            ${finalReserve.toString()},
+            ${finalReserve.multipliedBy(price).toString()}
           )`,
           });
         } else {
@@ -417,6 +418,10 @@ export default class AggregateProcessor {
           const _entryFees = new BigNumber(parseFloat(_entry.rows[0].fees));
           const _entryFeesValue = new BigNumber(parseFloat(_entry.rows[0].fees_value));
           const _entryLocked = new BigNumber(parseFloat(_entry.rows[0].locked));
+
+          const finalReserve = isFirstReserveLoaded
+            ? _entryLocked.minus(oldPoolReserve[`token${N}`]).plus(txn.reserves[`token${N}`])
+            : _entryLocked.plus(txn.reserves[`token${N}`]);
 
           // Update existing record by conditionally updating the HLC price,
           // and adding onto previous volume and fees if it's a swap in.
@@ -432,16 +437,8 @@ export default class AggregateProcessor {
               }, 
               fees=${isSwapIn ? _entryFees.plus(txn.txnFees[`token${N}`]) : _entryFees.toString()}, 
               fees_value=${isSwapIn ? _entryFeesValue.plus(txn.txnFeesValue[`token${N}`]) : _entryFeesValue.toString()},
-              locked=${
-                txn.txnType === TransactionType.ADD_LIQUIDITY || isSwapIn
-                  ? _entryLocked.plus(txn.txnAmounts[`token${N}`]).toString()
-                  : _entryLocked.minus(txn.txnAmounts[`token${N}`]).toString()
-              },
-              locked_value=${
-                txn.txnType === TransactionType.ADD_LIQUIDITY || isSwapIn
-                  ? _entryLocked.plus(txn.txnAmounts[`token${N}`]).multipliedBy(price).toString()
-                  : _entryLocked.minus(txn.txnAmounts[`token${N}`]).multipliedBy(price).toString()
-              }
+              locked=${finalReserve.toString()},
+              locked_value=${finalReserve.multipliedBy(price).toString()}
           `,
             where: `ts=${ts} AND token='${tokenSymbol}'`,
           });
@@ -459,7 +456,6 @@ export default class AggregateProcessor {
       // Get the start timestamp (UTC) of the hour/day in which txn timestamp is present
       const ts =
         period === Period.HOUR ? Math.floor(txn.timestamp / 3600) * 3600 : Math.floor(txn.timestamp / 86400) * 86400;
-      const tsLast = ts - (period === Period.HOUR ? 3600 : 86400);
 
       const _entry = await this._dbClient.get({
         table,
@@ -467,19 +463,41 @@ export default class AggregateProcessor {
         where: `ts=${ts}`,
       });
 
+      // Is the first reserve count added to the aggregate tvl
+      const isFirstReserveLoaded =
+        (
+          await this._dbClient.get({
+            table: "pool_aggregate_day",
+            select: "*",
+            where: `pool='${txn.pool.address}'`,
+          })
+        ).rowCount !== 0;
+
       if (_entry.rowCount === 0) {
         const _entryLast = await this._dbClient.get({
           table,
           select: "*",
-          where: `ts=(SELECT MAX(ts) FROM ${table} WHERE ts<=${tsLast})`,
+          where: `ts=(SELECT MAX(ts) FROM ${table} WHERE ts<${ts})`,
         });
 
-        let tvlLast = new BigNumber(0);
+        let tvlCurrent = new BigNumber(0);
         if (_entryLast.rowCount !== 0) {
-          tvlLast = new BigNumber(_entryLast.rows[0].tvl_value);
-        } else {
-          tvlLast = oldReserveValue;
+          tvlCurrent = new BigNumber(_entryLast.rows[0].tvl_value);
         }
+
+        const tvlFinal = isFirstReserveLoaded
+          ? tvlCurrent
+              .minus(oldReserveValue)
+              .plus(
+                txn.reserves.token1
+                  .multipliedBy(txn.txnPrices.token1)
+                  .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
+              )
+          : tvlCurrent.plus(
+              txn.reserves.token1
+                .multipliedBy(txn.txnPrices.token1)
+                .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
+            );
 
         await this._dbClient.insert({
           table,
@@ -505,13 +523,7 @@ export default class AggregateProcessor {
                   ? txn.txnFeesValue.token2
                   : 0
               },
-              ${tvlLast
-                .minus(oldReserveValue)
-                .plus(
-                  txn.reserves.token1
-                    .multipliedBy(txn.txnPrices.token1)
-                    .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-                )}
+              ${tvlFinal.toString()}
             )`,
         });
       } else {
@@ -519,6 +531,20 @@ export default class AggregateProcessor {
         const _entryVolumeValue = new BigNumber(parseFloat(_entry.rows[0].volume_value));
         const _entryFeesValue = new BigNumber(parseFloat(_entry.rows[0].fees_value));
         const _entryTvlValue = new BigNumber(parseFloat(_entry.rows[0].tvl_value));
+
+        const tvlFinal = isFirstReserveLoaded
+          ? _entryTvlValue
+              .minus(oldReserveValue)
+              .plus(
+                txn.reserves.token1
+                  .multipliedBy(txn.txnPrices.token1)
+                  .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
+              )
+          : _entryTvlValue.plus(
+              txn.reserves.token1
+                .multipliedBy(txn.txnPrices.token1)
+                .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
+            );
 
         // Add volume and fees to existing values
         await this._dbClient.update({
@@ -538,13 +564,7 @@ export default class AggregateProcessor {
                 ? _entryFeesValue.plus(txn.txnFeesValue.token2).toString()
                 : _entryFeesValue.toString()
             },
-            tvl_value=${_entryTvlValue
-              .minus(oldReserveValue)
-              .plus(
-                txn.reserves.token1
-                  .multipliedBy(txn.txnPrices.token1)
-                  .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-              )}
+            tvl_value=${tvlFinal.toString()}
           `,
           where: `ts=${ts}`,
         });
