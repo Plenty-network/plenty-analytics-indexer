@@ -1,19 +1,20 @@
 import axios from "axios";
 
-import { Data, Config, Dependecies } from "./types";
+import { Pools, Config, Dependecies } from "./types";
 
 import Cache from "./infrastructure/Cache";
 import TzktProvider from "./infrastructure/TzktProvider";
 import DatabaseClient from "./infrastructure/DatabaseClient";
 
 // Fetch pools and tokens data from Plenty's system wide config and caches it
-const getDataBuilder = (cache: Cache, config: Config) => async (): Promise<Data> => {
+const getPools = (cache: Cache, config: Config) => async (): Promise<Pools> => {
   try {
-    let data: Data | undefined = cache.get("data");
+    let data: Pools | undefined = cache.get("data");
     if (!data) {
       const pools = (await axios.get(config.configURL + "/pools")).data;
       data = {
-        pools,
+        v2: Object.values(pools),
+        v3: [],
       };
       cache.insert("data", data, config.ttl.data);
     }
@@ -31,7 +32,7 @@ export const buildDependencies = async (config: Config): Promise<Dependecies> =>
       config,
       dbClient: new DatabaseClient(config),
       tzktProvider: new TzktProvider(config),
-      getData: getDataBuilder(cache, config),
+      getPools: getPools(cache, config),
     };
   } catch (err) {
     throw err;

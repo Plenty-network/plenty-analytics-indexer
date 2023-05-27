@@ -26,7 +26,7 @@ services:
       TEZOS_RPC_URL: "${TEZOS_RPC_URL}"
 
   aggregate-recorder:
-    build: ./aggregate-recorder
+    build: ./recorder
     depends_on:
       db:
         condition: service_healthy

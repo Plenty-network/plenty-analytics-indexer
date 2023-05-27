@@ -1,18 +1,5 @@
 import fs from "fs";
-import axios from "axios";
-import { config } from "./config";
-
-// Retries axios connection every 3 seconds
-export const addRetryToAxios = () => {
-  axios.interceptors.response.use(null, async (error) => {
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    console.log(`
-      Axios request error: ${error.message},\n
-      URL: ${error.config.url}
-    `);
-    return axios.request(error.config);
-  });
-};
+import { config } from "../config";
 
 export const getLastLevel = (): number => {
   if (!fs.existsSync(`/data/level.json`)) {

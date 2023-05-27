@@ -48,9 +48,9 @@ function build({ getData, dbClient }: Dependencies): Router {
 
       function getTypeSelector(type: string) {
         if (type === "swap") {
-          return `(t.type='swap_token_1' OR t.type='swap_token_2')`;
+          return `(t.type='SWAP_TOKEN_1' OR t.type='SWAP_TOKEN_2')`;
         } else {
-          return `t.type='${type}'`;
+          return `t.type='${type.toUpperCase()}'`;
         }
       }
 

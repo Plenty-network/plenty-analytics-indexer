@@ -28,13 +28,11 @@ function build({ getData, dbClient }: Dependencies): Router {
           select: `
             pool,
             SUM(token_1_volume) as t1volume,
-            SUM(token_1_volume_value) as t1volume_value,
             SUM(token_2_volume) as t2volume,
-            SUM(token_2_volume_value) as t2volume_value,
+            SUM(volume_value) as volume_value,
             SUM(token_1_fees) as t1fees,
-            SUM(token_1_fees_value) as t1fees_value,
             SUM(token_2_fees) as t2fees,
-            SUM(token_2_fees_value) as t2fees_value
+            SUM(fees_value) as fees_value
           `,
           where: `ts>=${ts1} AND ts<${ts2} GROUP BY pool`,
         });
@@ -69,9 +67,8 @@ function build({ getData, dbClient }: Dependencies): Router {
           SELECT 
             t.pool, 
             t.token_1_locked l1, 
-            t.token_1_locked_value l1v, 
             t.token_2_locked l2,
-            t.token_2_locked_value l2v
+            t.locked_value lv
           FROM (
             SELECT MAX(ts) mts, pool 
             FROM pool_aggregate_hour WHERE ts<=${ts} GROUP BY pool
@@ -94,21 +91,13 @@ function build({ getData, dbClient }: Dependencies): Router {
       // Loop through every in the system
       for (const pool of Object.keys(data.pools)) {
         // Retrieve data fields from DB entry
-        const lockedValueCH =
-          parseFloat(lastLockedValueCH[pool]?.l1v ?? 0) + parseFloat(lastLockedValueCH[pool]?.l2v ?? 0);
+        const lockedValueCH = parseFloat(lastLockedValueCH[pool]?.lv ?? 0);
 
-        const vol7D =
-          parseFloat(aggregate7D[pool]?.t1volume_value ?? 0) + parseFloat(aggregate7D[pool]?.t1volume_value ?? 0);
-        const fees7D =
-          parseFloat(aggregate7D[pool]?.t1fees_value ?? 0) + parseFloat(aggregate7D[pool]?.t2fees_value ?? 0);
-
-        const feesEpoch =
-          parseFloat(aggregateEpoch[pool]?.t1fees_value ?? 0) + parseFloat(aggregateEpoch[pool]?.t2fees_value ?? 0);
-
-        const vol24H =
-          parseFloat(aggregate24H[pool]?.t1volume_value ?? 0) + parseFloat(aggregate24H[pool]?.t2volume_value ?? 0);
-        const fees24H =
-          parseFloat(aggregate24H[pool]?.t1fees_value ?? 0) + parseFloat(aggregate24H[pool]?.t2fees_value ?? 0);
+        const vol7D = parseFloat(aggregate7D[pool]?.volume_value ?? 0);
+        const fees7D = parseFloat(aggregate7D[pool]?.fees_value ?? 0);
+        const feesEpoch = parseFloat(aggregateEpoch[pool]?.fees_value ?? 0);
+        const vol24H = parseFloat(aggregate24H[pool]?.volume_value ?? 0);
+        const fees24H = parseFloat(aggregate24H[pool]?.fees_value ?? 0);
 
         pools.push({
           pool: pool,

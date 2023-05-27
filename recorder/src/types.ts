@@ -1,9 +1,10 @@
+import BigNumber from "bignumber.js";
 import DatabaseClient from "./infrastructure/DatabaseClient";
 import TzktProvider from "./infrastructure/TzktProvider";
 
-//===============
-// Service types
-//===============
+//========
+// Common
+//========
 
 export interface Config {
   heartbeatURL: string;
@@ -30,7 +31,7 @@ export interface Dependecies {
   config: Config;
   dbClient: DatabaseClient;
   tzktProvider: TzktProvider;
-  getData: () => Promise<Data>;
+  getPools: () => Promise<Pools>;
 }
 
 export interface BlockData {
@@ -133,7 +134,7 @@ export enum PoolType {
   VOLATILE = "VOLATILE",
 }
 
-export interface Pool {
+export interface PoolV2 {
   address: string;
   token1: Token;
   token2: Token;
@@ -141,43 +142,38 @@ export interface Pool {
   type: PoolType;
 }
 
-export interface Pools {
-  [key: string]: Pool;
+export interface PoolV3 {
+  address: string;
+  tokenX: Token;
+  tokenY: Token;
+  feeBps: number;
 }
 
-export interface Data {
-  pools: Pools;
+export interface Pools {
+  v2: PoolV2[];
+  v3: PoolV3[];
 }
 
 //=================
 // Processor types
 //=================
 
-export enum PricingType {
-  SWAP = "SWAP",
-  STORAGE = "STORAGE",
+export interface PlentyV2Transaction {
+  id: number;
+  hash: string;
+  timestamp: number;
+  account: string;
+  pool: PoolV2;
+  reserves: { token1: BigNumber; token2: BigNumber };
+  txnType: TransactionType;
+  txnAmounts: { token1: BigNumber; token2: BigNumber };
+  txnFees: { token1: BigNumber; token2: BigNumber };
+  txnPrices: { token1: BigNumber; token2: BigNumber };
+  txnValue: { token1: BigNumber; token2: BigNumber };
+  txnFeesValue: { token1: BigNumber; token2: BigNumber };
 }
 
-export interface Pair {
-  address: string;
-  type: PoolType;
-  token1: {
-    data: Token;
-    pool: number;
-    amount: number;
-    price: number;
-  };
-  token2: {
-    data: Token;
-    pool: number;
-    amount: number;
-    price: number;
-  };
-  fees: number;
-  transactionType?: TransactionType;
-}
-
-export enum AggregateType {
+export enum Period {
   HOUR = "HOUR",
   DAY = "DAY",
 }
@@ -187,18 +183,4 @@ export enum TransactionType {
   SWAP_TOKEN_2 = "SWAP_TOKEN_2",
   ADD_LIQUIDITY = "ADD_LIQUIDITY",
   REMOVE_LIQUIDITY = "REMOVE_LIQUIDITY",
-}
-
-export interface TransactionRecord {
-  ts: number;
-  type: TransactionType;
-  aggregateType: AggregateType;
-  pair: Pair;
-}
-
-export interface PlentyRecord {
-  ts: number;
-  aggregateType: AggregateType;
-  tradeValue: number;
-  feesValue: number;
 }
