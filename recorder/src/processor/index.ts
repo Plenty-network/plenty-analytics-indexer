@@ -146,8 +146,8 @@ export default class AggregateProcessor {
               } else {
                 plentyV2Txn.txnType = TransactionType.SWAP_TOKEN_1;
               }
-            } else if (constants.REMOVE_LIQUIDITY_ENTRYPOINS.includes(txn.parameter?.entrypoint)) {
-              plentyV2Txn.txnType = TransactionType.ADD_LIQUIDITY;
+            } else if (constants.REMOVE_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
+              plentyV2Txn.txnType = TransactionType.REMOVE_LIQUIDITY;
             }
 
             const oldReserveToken1 =
@@ -619,7 +619,7 @@ export default class AggregateProcessor {
           entrypoint: [
             ...constants.SWAP_ENTRYPOINTS,
             ...constants.ADD_LIQUIDITY_ENTRYPOINTS,
-            ...constants.REMOVE_LIQUIDITY_ENTRYPOINS,
+            ...constants.REMOVE_LIQUIDITY_ENTRYPOINTS,
           ],
           level,
           limit: this._config.tzktLimit,
