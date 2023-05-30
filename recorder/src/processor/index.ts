@@ -150,6 +150,13 @@ export default class AggregateProcessor {
               plentyV2Txn.txnType = TransactionType.REMOVE_LIQUIDITY;
             }
 
+            await this._recordTransaction(plentyV2Txn);
+
+            // Don't record aggregate values if any of the tokens is unpriced
+            if (token1Price.isEqualTo(0) || token2Price.isEqualTo(0)) {
+              continue;
+            }
+
             const oldReserveToken1 =
               plentyV2Txn.txnType === TransactionType.SWAP_TOKEN_1 ||
               plentyV2Txn.txnType === TransactionType.ADD_LIQUIDITY
@@ -165,7 +172,6 @@ export default class AggregateProcessor {
             const oldReserveToken1Value = oldReserveToken1.multipliedBy(oldToken1Price);
             const oldReserveToken2Value = oldReserveToken2.multipliedBy(oldToken2Price);
 
-            await this._recordTransaction(plentyV2Txn);
             await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
             await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
             await this._recordPlenty(plentyV2Txn, oldReserveToken1Value.plus(oldReserveToken2Value), Period.HOUR);
