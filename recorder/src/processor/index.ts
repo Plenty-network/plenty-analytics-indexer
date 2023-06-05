@@ -104,10 +104,6 @@ export default class AggregateProcessor {
               txnFeesValue: { token1: constants.ZERO_VAL, token2: constants.ZERO_VAL },
             };
 
-            // Required for plenty aggregate
-            const oldToken1Price = await getPriceAt(this._dbClient, plentyV2Txn.timestamp, pool.token1.symbol);
-            const oldToken2Price = await getPriceAt(this._dbClient, plentyV2Txn.timestamp, pool.token2.symbol);
-
             // Token prices
             const [token1Price, token2Price] = await calculatePrice(this._dbClient, plentyV2Txn);
 
@@ -169,13 +165,10 @@ export default class AggregateProcessor {
                 ? token2Reserve.minus(token2Amount)
                 : token2Reserve.plus(token2Amount);
 
-            const oldReserveToken1Value = oldReserveToken1.multipliedBy(oldToken1Price);
-            const oldReserveToken2Value = oldReserveToken2.multipliedBy(oldToken2Price);
-
             await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
             await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
-            await this._recordPlenty(plentyV2Txn, oldReserveToken1Value.plus(oldReserveToken2Value), Period.HOUR);
-            await this._recordPlenty(plentyV2Txn, oldReserveToken1Value.plus(oldReserveToken2Value), Period.DAY);
+            await this._recordPlenty(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
+            await this._recordPlenty(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
             await this._recordPool(plentyV2Txn, Period.HOUR);
             await this._recordPool(plentyV2Txn, Period.DAY);
           }
@@ -455,7 +448,7 @@ export default class AggregateProcessor {
     }
   }
 
-  private async _recordPlenty(txn: PlentyV2Transaction, oldReserveValue: BigNumber, period: Period): Promise<void> {
+  private async _recordPlenty(txn: PlentyV2Transaction, oldPoolReserve: any, period: Period): Promise<void> {
     try {
       const table = `plenty_aggregate_${period.toLowerCase()}`;
 
@@ -479,6 +472,27 @@ export default class AggregateProcessor {
           })
         ).rowCount !== 0;
 
+      let oldReserveValue = new BigNumber(0);
+
+      // If it is not the first record, get the last ts and find value of the pool reserves
+      // taking prices at that ts
+      if (isFirstReserveLoaded) {
+        const lastTs = (
+          await this._dbClient.get({
+            table: "transaction",
+            select: "ts",
+            where: `ts=(SELECT MAX(ts) FROM transaction WHERE pool='${txn.pool.address}')`,
+          })
+        ).rows[0].ts;
+
+        const oldToken1Price = await getPriceAt(this._dbClient, parseInt(lastTs), txn.pool.token1.symbol);
+        const oldToken2Price = await getPriceAt(this._dbClient, parseInt(lastTs), txn.pool.token2.symbol);
+
+        oldReserveValue = oldPoolReserve.token1
+          .multipliedBy(oldToken1Price)
+          .plus(oldPoolReserve.token2.multipliedBy(oldToken2Price));
+      }
+
       if (_entry.rowCount === 0) {
         const _entryLast = await this._dbClient.get({
           table,
@@ -491,19 +505,13 @@ export default class AggregateProcessor {
           tvlCurrent = new BigNumber(_entryLast.rows[0].tvl_value);
         }
 
-        const tvlFinal = isFirstReserveLoaded
-          ? tvlCurrent
-              .minus(oldReserveValue)
-              .plus(
-                txn.reserves.token1
-                  .multipliedBy(txn.txnPrices.token1)
-                  .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-              )
-          : tvlCurrent.plus(
-              txn.reserves.token1
-                .multipliedBy(txn.txnPrices.token1)
-                .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-            );
+        const tvlFinal = tvlCurrent
+          .minus(oldReserveValue)
+          .plus(
+            txn.reserves.token1
+              .multipliedBy(txn.txnPrices.token1)
+              .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
+          );
 
         await this._dbClient.insert({
           table,
@@ -538,19 +546,13 @@ export default class AggregateProcessor {
         const _entryFeesValue = new BigNumber(parseFloat(_entry.rows[0].fees_value));
         const _entryTvlValue = new BigNumber(parseFloat(_entry.rows[0].tvl_value));
 
-        const tvlFinal = isFirstReserveLoaded
-          ? _entryTvlValue
-              .minus(oldReserveValue)
-              .plus(
-                txn.reserves.token1
-                  .multipliedBy(txn.txnPrices.token1)
-                  .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-              )
-          : _entryTvlValue.plus(
-              txn.reserves.token1
-                .multipliedBy(txn.txnPrices.token1)
-                .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-            );
+        const tvlFinal = _entryTvlValue
+          .minus(oldReserveValue)
+          .plus(
+            txn.reserves.token1
+              .multipliedBy(txn.txnPrices.token1)
+              .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
+          );
 
         // Add volume and fees to existing values
         await this._dbClient.update({
