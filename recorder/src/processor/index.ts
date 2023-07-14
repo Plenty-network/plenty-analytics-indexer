@@ -500,72 +500,27 @@ export default class AggregateProcessor {
       const ts =
         period === Period.HOUR ? Math.floor(txn.timestamp / 3600) * 3600 : Math.floor(txn.timestamp / 86400) * 86400;
 
-      const _entry = await this._dbClient.get({
+      const currentEntry = await this._dbClient.get({
         table,
         select: "*",
         where: `ts=${ts}`,
       });
 
-      // Is the first reserve count added to the aggregate tvl
-      const isFirstReserveLoaded =
-        (
-          await this._dbClient.get({
-            table: "pool_aggregate_day",
-            select: "*",
-            where: `pool='${txn.pool.address}'`,
-          })
-        ).rowCount !== 0;
-
-      let oldReserveValue = new BigNumber(0);
-
-      // If it is not the first record, get the last ts and find value of the pool reserves
-      // taking prices at that ts
-      if (isFirstReserveLoaded) {
-        const lastTs = (
-          await this._dbClient.get({
-            table: "transaction",
-            select: "ts",
-            where: `ts=(SELECT MAX(ts) FROM transaction WHERE pool='${txn.pool.address}')`,
-          })
-        ).rows[0].ts;
-
-        const oldToken1Price = await getPriceAt(
-          this._dbClient,
-          parseInt(lastTs),
-          txn.pool.token1.id,
-          txn.pool.token1.symbol
-        );
-        const oldToken2Price = await getPriceAt(
-          this._dbClient,
-          parseInt(lastTs),
-          txn.pool.token2.id,
-          txn.pool.token2.symbol
-        );
-
-        oldReserveValue = oldPoolReserve.token1
-          .multipliedBy(oldToken1Price)
-          .plus(oldPoolReserve.token2.multipliedBy(oldToken2Price));
-      }
-
-      if (_entry.rowCount === 0) {
-        const _entryLast = await this._dbClient.get({
-          table,
-          select: "*",
-          where: `ts=(SELECT MAX(ts) FROM ${table} WHERE ts<${ts})`,
-        });
-
-        let tvlCurrent = new BigNumber(0);
-        if (_entryLast.rowCount !== 0) {
-          tvlCurrent = new BigNumber(_entryLast.rows[0].tvl_value);
-        }
-
-        const tvlFinal = tvlCurrent
-          .minus(oldReserveValue)
-          .plus(
-            txn.reserves.token1
-              .multipliedBy(txn.txnPrices.token1)
-              .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-          );
+      // If no existing entry is present for the timestamp
+      if (currentEntry.rowCount === 0) {
+        // Get the TVL (i.e value locked across tokens) for the last hour, grouped by tokens
+        const tvl = (
+          await this._dbClient.raw(`
+          SELECT sum(locked_value) as tvl 
+          FROM (
+            SELECT token, MAX(ts) mts FROM
+              token_aggregate_hour
+            WHERE ts<${ts} GROUP BY token
+          ) r
+          JOIN token_aggregate_hour t
+            ON r.token=t.token AND r.mts=t.ts;
+        `)
+        ).rows[0].tvl;
 
         await this._dbClient.insert({
           table,
@@ -591,22 +546,26 @@ export default class AggregateProcessor {
                   ? txn.txnFeesValue.token2
                   : 0
               },
-              ${tvlFinal.toString()}
+              ${tvl.toString()}
             )`,
         });
       } else {
-        // Existing values for each field at a given timestamp
-        const _entryVolumeValue = new BigNumber(parseFloat(_entry.rows[0].volume_value));
-        const _entryFeesValue = new BigNumber(parseFloat(_entry.rows[0].fees_value));
-        const _entryTvlValue = new BigNumber(parseFloat(_entry.rows[0].tvl_value));
+        // Get the TVL of the last hour
+        let tvl = new BigNumber(0);
+        const previousEntryHour = await this._dbClient.get({
+          table: "plenty_aggregate_hour",
+          select: "*",
+          where: `ts=(SELECT MAX(ts) FROM ${table} WHERE ts<=${ts})`,
+        });
+        if (period === Period.DAY && previousEntryHour.rowCount !== 0) {
+          tvl = new BigNumber(previousEntryHour.rows[0].tvl_value);
+        } else {
+          tvl = new BigNumber(currentEntry.rows[0].tvl_value);
+        }
 
-        const tvlFinal = _entryTvlValue
-          .minus(oldReserveValue)
-          .plus(
-            txn.reserves.token1
-              .multipliedBy(txn.txnPrices.token1)
-              .plus(txn.reserves.token2.multipliedBy(txn.txnPrices.token2))
-          );
+        // Existing values for each field at a given timestamp
+        const _entryVolumeValue = new BigNumber(parseFloat(currentEntry.rows[0].volume_value));
+        const _entryFeesValue = new BigNumber(parseFloat(currentEntry.rows[0].fees_value));
 
         // Add volume and fees to existing values
         await this._dbClient.update({
@@ -626,7 +585,7 @@ export default class AggregateProcessor {
                 ? _entryFeesValue.plus(txn.txnFeesValue.token2).toString()
                 : _entryFeesValue.toString()
             },
-            tvl_value=${tvlFinal.toString()}
+            tvl_value=${tvl.toString()}
           `,
           where: `ts=${ts}`,
         });

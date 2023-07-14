@@ -185,4 +185,13 @@ export default class DatabaseClient {
       throw err;
     }
   }
+
+  async raw(query: string): Promise<QueryResult<any>> {
+    try {
+      const res = await this._dbClient.query(query);
+      return res;
+    } catch (err) {
+      throw err;
+    }
+  }
 }
