@@ -9,7 +9,6 @@ import TzktProvider from "./infrastructure/TzktProvider";
 export interface Config {
   heartbeatURL: string;
   tzktURL: string;
-  configURL: string;
   blockPort: string;
   reorgLag: number;
   tzktLimit: number;
@@ -31,7 +30,7 @@ export interface Dependecies {
   config: Config;
   dbClient: DatabaseClient;
   tzktProvider: TzktProvider;
-  getPools: () => Promise<Pools>;
+  getPools: () => Promise<Pool[]>;
 }
 
 export interface BlockData {
@@ -51,7 +50,7 @@ export interface CachedValue {
 export interface DatabaseGetParams {
   table: string;
   select: string;
-  where: string;
+  where?: string;
 }
 
 export interface DatabaseInsertParams {
@@ -112,17 +111,21 @@ export interface Transaction {
 //=====================
 
 export enum TokenStandard {
-  TEZ = "TEZ",
   FA12 = "FA1.2",
   FA2 = "FA2",
+  TEZ = "TEZ",
 }
 
 export interface Token {
+  id: number;
+  name: string;
   symbol: string;
   decimals: number;
   standard: TokenStandard;
   address?: string;
   tokenId?: number;
+  thumbnailUri?: string;
+  originChain: string;
 }
 
 export interface Tokens {
@@ -130,11 +133,13 @@ export interface Tokens {
 }
 
 export enum PoolType {
-  STABLE = "STABLE",
-  VOLATILE = "VOLATILE",
+  V2_STABLE = "STABLE",
+  V2_VOLATILE = "VOLATILE",
+  V2_TEZ = "TEZ",
+  V3 = "V3",
 }
 
-export interface PoolV2 {
+export interface Pool {
   address: string;
   token1: Token;
   token2: Token;
@@ -142,28 +147,16 @@ export interface PoolV2 {
   type: PoolType;
 }
 
-export interface PoolV3 {
-  address: string;
-  tokenX: Token;
-  tokenY: Token;
-  feeBps: number;
-}
-
-export interface Pools {
-  v2: PoolV2[];
-  v3: PoolV3[];
-}
-
 //=================
 // Processor types
 //=================
 
-export interface PlentyV2Transaction {
+export interface PlentyTransaction {
   id: number;
   hash: string;
   timestamp: number;
   account: string;
-  pool: PoolV2;
+  pool: Pool;
   reserves: { token1: BigNumber; token2: BigNumber };
   txnType: TransactionType;
   txnAmounts: { token1: BigNumber; token2: BigNumber };

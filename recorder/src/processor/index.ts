@@ -1,12 +1,13 @@
 import {
-  Pools,
+  Pool,
+  Token,
   Config,
-  PoolV2,
   Period,
+  PoolType,
   Dependecies,
   Transaction,
   TransactionType,
-  PlentyV2Transaction,
+  PlentyTransaction,
 } from "../types";
 import {
   getPriceAt,
@@ -28,7 +29,7 @@ export default class AggregateProcessor {
   private _config: Config;
   private _dbClient: DatabaseClient;
   private _tkztProvider: TzktProvider;
-  private _getPools: () => Promise<Pools>;
+  private _getPools: () => Promise<Pool[]>;
 
   constructor({ config, dbClient, tzktProvider, getPools }: Dependecies) {
     this._config = config;
@@ -46,14 +47,14 @@ export default class AggregateProcessor {
 
     try {
       for (level = getLastLevel() + 1; level <= lastLevel; level++) {
-        // Process v2 pool transactions
-        for (const pool of pools.v2) {
+        // Process transactions
+        for (const pool of pools) {
           currentPool = pool.address;
           const operationHashes = await this._getOperationHashes(pool.address, level);
           for (const hash of operationHashes) {
             const operation = await this._tkztProvider.getOperation(hash);
             currentOperation = hash;
-            await this._processOperationV2(operation, pool);
+            await this._processOperation(operation, pool);
           }
         }
         recordLastLevel(level);
@@ -68,7 +69,7 @@ export default class AggregateProcessor {
     }
   }
 
-  private async _processOperationV2(operation: Transaction[], pool: PoolV2): Promise<void> {
+  private async _processOperation(operation: Transaction[], pool: Pool): Promise<void> {
     try {
       for (const [index, txn] of operation.entries()) {
         if (txn.target?.address === pool.address) {
@@ -87,9 +88,25 @@ export default class AggregateProcessor {
             const token2Amount = getTokenAmountFromOperation(pool.token2, operation, index);
 
             // Pair token reserves during the transaction
-            const [token1Reserve, token2Reserve] = getTokenReserveFromStorage(txn, pool);
+            let token1Reserve, token2Reserve;
+            if (pool.type === PoolType.V3) {
+              // fetch from pool balances
+              [token1Reserve, token2Reserve] = [
+                await this._tkztProvider.getTokenBalance(pool.token1, pool.address),
+                await this._tkztProvider.getTokenBalance(pool.token2, pool.address),
+              ];
+            } else {
+              // From storage
+              [token1Reserve, token2Reserve] = getTokenReserveFromStorage(txn, pool);
+            }
 
-            const plentyV2Txn: PlentyV2Transaction = {
+            function calculateFees(base: BigNumber) {
+              return pool.type === PoolType.V3
+                ? base.multipliedBy(pool.fees).dividedBy(10000)
+                : base.dividedBy(pool.fees);
+            }
+
+            const plentyTxn: PlentyTransaction = {
               id: txn.id,
               hash: txn.hash,
               timestamp: Math.floor(new Date(txn.timestamp).getTime() / 1000),
@@ -98,55 +115,84 @@ export default class AggregateProcessor {
               reserves: { token1: token1Reserve, token2: token2Reserve },
               txnType: TransactionType.ADD_LIQUIDITY, // May potentially change below
               txnAmounts: { token1: token1Amount, token2: token2Amount },
-              txnFees: { token1: token1Amount.dividedBy(pool.fees), token2: token2Amount.dividedBy(pool.fees) },
+              txnFees: {
+                token1: calculateFees(token1Amount),
+                token2: calculateFees(token2Amount),
+              },
               txnPrices: { token1: constants.ZERO_VAL, token2: constants.ZERO_VAL },
               txnValue: { token1: constants.ZERO_VAL, token2: constants.ZERO_VAL },
               txnFeesValue: { token1: constants.ZERO_VAL, token2: constants.ZERO_VAL },
             };
 
             // Token prices
-            const [token1Price, token2Price] = await calculatePrice(this._dbClient, plentyV2Txn);
+            const [token1Price, token2Price] = await calculatePrice(this._dbClient, plentyTxn);
 
             // Record spot price of the tokens
-            await this._recordSpotPrice(plentyV2Txn.timestamp, plentyV2Txn.pool.token1.symbol, token1Price);
-            await this._recordSpotPrice(plentyV2Txn.timestamp, plentyV2Txn.pool.token2.symbol, token2Price);
+            await this._recordSpotPrice(plentyTxn.timestamp, plentyTxn.pool.token1, token1Price);
+            await this._recordSpotPrice(plentyTxn.timestamp, plentyTxn.pool.token2, token2Price);
 
-            plentyV2Txn.txnPrices = { token1: token1Price, token2: token2Price };
-            plentyV2Txn.txnValue = {
+            plentyTxn.txnPrices = { token1: token1Price, token2: token2Price };
+            plentyTxn.txnValue = {
               token1: token1Amount.multipliedBy(token1Price),
               token2: token2Amount.multipliedBy(token2Price),
             };
-            plentyV2Txn.txnFeesValue = {
-              token1: plentyV2Txn.txnValue.token1.dividedBy(pool.fees),
-              token2: plentyV2Txn.txnValue.token2.dividedBy(pool.fees),
+            plentyTxn.txnFeesValue = {
+              token1: calculateFees(plentyTxn.txnValue.token1),
+              token2: calculateFees(plentyTxn.txnValue.token2),
             };
 
             // Set txn type based on entrypoint called
-            if (constants.ADD_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
-              plentyV2Txn.txnType = TransactionType.ADD_LIQUIDITY;
+            // V2 liquidity
+            if (constants.V2_ADD_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
+              plentyTxn.txnType = TransactionType.ADD_LIQUIDITY;
+            } else if (constants.V2_REMOVE_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
+              plentyTxn.txnType = TransactionType.REMOVE_LIQUIDITY;
             }
-            // Swaps
-            else if (constants.SWAP_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
+            // V2 swaps
+            else if (constants.V2_SWAP_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
               // Decide transaction type based on whether token 1 is swapped for token 2 or vice versa
-              if (plentyV2Txn.pool.address === this._config.tezCtezPool) {
+              if (plentyTxn.pool.address === this._config.tezCtezPool) {
                 if (txn.parameter.entrypoint === constants.TEZ_SWAP_ENTRYPOINT) {
-                  plentyV2Txn.txnType = TransactionType.SWAP_TOKEN_1; // token 1 is swapped for token 2
+                  plentyTxn.txnType = TransactionType.SWAP_TOKEN_1; // token 1 is swapped for token 2
                 } else {
-                  plentyV2Txn.txnType = TransactionType.SWAP_TOKEN_2; // token 2 is swapped for token 1
+                  plentyTxn.txnType = TransactionType.SWAP_TOKEN_2; // token 2 is swapped for token 1
                 }
               } else if (
-                txn.parameter.value.requiredTokenAddress === plentyV2Txn.pool.token1.address &&
-                txn.parameter.value.requiredTokenId === (plentyV2Txn.pool.token1.tokenId?.toString() ?? "0")
+                txn.parameter.value.requiredTokenAddress === plentyTxn.pool.token1.address &&
+                txn.parameter.value.requiredTokenId === (plentyTxn.pool.token1.tokenId?.toString() ?? "0")
               ) {
-                plentyV2Txn.txnType = TransactionType.SWAP_TOKEN_2;
+                plentyTxn.txnType = TransactionType.SWAP_TOKEN_2;
               } else {
-                plentyV2Txn.txnType = TransactionType.SWAP_TOKEN_1;
+                plentyTxn.txnType = TransactionType.SWAP_TOKEN_1;
               }
-            } else if (constants.REMOVE_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
-              plentyV2Txn.txnType = TransactionType.REMOVE_LIQUIDITY;
+            }
+            // V3 liquidity
+            else if (constants.V3_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
+              // Add liquidity
+              if (
+                (txn.parameter?.entrypoint === constants.V3_SET_POSITION &&
+                  parseInt(txn.parameter?.value?.liquidity) !== 0) ||
+                (txn.parameter?.entrypoint === constants.V3_UPDATE_POSITION &&
+                  parseInt(txn.parameter?.value?.liquidity_delta) > 0)
+              ) {
+                plentyTxn.txnType = TransactionType.ADD_LIQUIDITY;
+              } else if (parseInt(txn.parameter?.value?.liquidity_delta) < 0) {
+                plentyTxn.txnType = TransactionType.REMOVE_LIQUIDITY;
+              } else {
+                // Fee collection may be skipped from being recorded
+                continue;
+              }
+            }
+            // V3 swaps
+            else if (constants.V3_SWAP_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
+              if (txn.parameter?.entrypoint === constants.V3_SWAP_X_TO_Y) {
+                plentyTxn.txnType = TransactionType.SWAP_TOKEN_1;
+              } else {
+                plentyTxn.txnType = TransactionType.SWAP_TOKEN_2;
+              }
             }
 
-            await this._recordTransaction(plentyV2Txn);
+            await this._recordTransaction(plentyTxn);
 
             // Don't record aggregate values if any of the tokens is unpriced
             if (token1Price.isEqualTo(0) || token2Price.isEqualTo(0)) {
@@ -154,23 +200,21 @@ export default class AggregateProcessor {
             }
 
             const oldReserveToken1 =
-              plentyV2Txn.txnType === TransactionType.SWAP_TOKEN_1 ||
-              plentyV2Txn.txnType === TransactionType.ADD_LIQUIDITY
+              plentyTxn.txnType === TransactionType.SWAP_TOKEN_1 || plentyTxn.txnType === TransactionType.ADD_LIQUIDITY
                 ? token1Reserve.minus(token1Amount)
                 : token1Reserve.plus(token1Amount);
 
             const oldReserveToken2 =
-              plentyV2Txn.txnType === TransactionType.SWAP_TOKEN_2 ||
-              plentyV2Txn.txnType === TransactionType.ADD_LIQUIDITY
+              plentyTxn.txnType === TransactionType.SWAP_TOKEN_2 || plentyTxn.txnType === TransactionType.ADD_LIQUIDITY
                 ? token2Reserve.minus(token2Amount)
                 : token2Reserve.plus(token2Amount);
 
-            await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
-            await this._recordToken(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
-            await this._recordPlenty(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
-            await this._recordPlenty(plentyV2Txn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
-            await this._recordPool(plentyV2Txn, Period.HOUR);
-            await this._recordPool(plentyV2Txn, Period.DAY);
+            await this._recordToken(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
+            await this._recordToken(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
+            await this._recordPlenty(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
+            await this._recordPlenty(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
+            await this._recordPool(plentyTxn, Period.HOUR);
+            await this._recordPool(plentyTxn, Period.DAY);
           }
         }
       }
@@ -179,7 +223,7 @@ export default class AggregateProcessor {
     }
   }
 
-  private async _recordTransaction(txn: PlentyV2Transaction) {
+  private async _recordTransaction(txn: PlentyTransaction) {
     try {
       const value =
         txn.txnType === TransactionType.ADD_LIQUIDITY || txn.txnType === TransactionType.REMOVE_LIQUIDITY
@@ -218,7 +262,7 @@ export default class AggregateProcessor {
     }
   }
 
-  private async _recordPool(txn: PlentyV2Transaction, period: Period) {
+  private async _recordPool(txn: PlentyTransaction, period: Period) {
     try {
       const table = `pool_aggregate_${period.toLowerCase()}`;
 
@@ -321,7 +365,7 @@ export default class AggregateProcessor {
     }
   }
 
-  private async _recordToken(txn: PlentyV2Transaction, oldPoolReserve: any, period: Period): Promise<void> {
+  private async _recordToken(txn: PlentyTransaction, oldPoolReserve: any, period: Period): Promise<void> {
     try {
       const table = `token_aggregate_${period.toLowerCase()}`;
 
@@ -349,12 +393,12 @@ export default class AggregateProcessor {
 
         // Store field values in variables for ease-of-use
         const price = txn.txnPrices[`token${N}`];
-        const tokenSymbol = txn.pool[`token${N}`].symbol;
+        const dbTokenId = txn.pool[`token${N}`].id;
 
         const _entry = await this._dbClient.get({
           table,
           select: "*",
-          where: `ts=${ts} AND token='${tokenSymbol}'`,
+          where: `ts=${ts} AND token=${dbTokenId}`,
         });
 
         // If no existing entry present for the timestamp
@@ -363,9 +407,9 @@ export default class AggregateProcessor {
             table,
             select: "*",
             where: `
-              token='${tokenSymbol}' 
+              token=${dbTokenId}
                 AND 
-              ts=(SELECT MAX(ts) FROM ${table} WHERE token='${tokenSymbol}' AND ts<${ts})`,
+              ts=(SELECT MAX(ts) FROM ${table} WHERE token=${dbTokenId} AND ts<${ts})`,
           });
 
           let currentReserve = new BigNumber(0);
@@ -397,7 +441,7 @@ export default class AggregateProcessor {
             )`,
             values: `(
             ${ts}, 
-            '${tokenSymbol}', 
+            ${dbTokenId}, 
             ${price.toString()}, 
             ${price.toString()}, 
             ${price.toString()}, 
@@ -439,7 +483,7 @@ export default class AggregateProcessor {
               locked=${finalReserve.toString()},
               locked_value=${finalReserve.multipliedBy(price).toString()}
           `,
-            where: `ts=${ts} AND token='${tokenSymbol}'`,
+            where: `ts=${ts} AND token=${dbTokenId}`,
           });
         }
       }
@@ -448,7 +492,7 @@ export default class AggregateProcessor {
     }
   }
 
-  private async _recordPlenty(txn: PlentyV2Transaction, oldPoolReserve: any, period: Period): Promise<void> {
+  private async _recordPlenty(txn: PlentyTransaction, oldPoolReserve: any, period: Period): Promise<void> {
     try {
       const table = `plenty_aggregate_${period.toLowerCase()}`;
 
@@ -485,8 +529,18 @@ export default class AggregateProcessor {
           })
         ).rows[0].ts;
 
-        const oldToken1Price = await getPriceAt(this._dbClient, parseInt(lastTs), txn.pool.token1.symbol);
-        const oldToken2Price = await getPriceAt(this._dbClient, parseInt(lastTs), txn.pool.token2.symbol);
+        const oldToken1Price = await getPriceAt(
+          this._dbClient,
+          parseInt(lastTs),
+          txn.pool.token1.id,
+          txn.pool.token1.symbol
+        );
+        const oldToken2Price = await getPriceAt(
+          this._dbClient,
+          parseInt(lastTs),
+          txn.pool.token2.id,
+          txn.pool.token2.symbol
+        );
 
         oldReserveValue = oldPoolReserve.token1
           .multipliedBy(oldToken1Price)
@@ -585,28 +639,28 @@ export default class AggregateProcessor {
   /**
    * @description Simply records the price of a token at a given timestamp in price_spot table.
    */
-  private async _recordSpotPrice(ts: number, tokenSymbol: string, price: BigNumber): Promise<void> {
+  private async _recordSpotPrice(ts: number, token: Token, price: BigNumber): Promise<void> {
     try {
       // Do not record dollar stablecoins
-      if (constants.PRICING_TREE[0].includes(tokenSymbol)) return;
+      if (constants.PRICING_TREE[0].includes(token.symbol)) return;
 
       const _entry = await this._dbClient.get({
         table: "price_spot",
         select: "token",
-        where: `ts=${ts} AND token='${tokenSymbol}'`,
+        where: `ts=${ts} AND token=${token.id}`,
       });
 
       if (_entry.rowCount !== 0) {
         await this._dbClient.update({
           table: "price_spot",
           set: `value=${price.toString()}`,
-          where: `ts=${ts} AND token='${tokenSymbol}'`,
+          where: `ts=${ts} AND token=${token.id}`,
         });
       } else {
         await this._dbClient.insert({
           table: "price_spot",
           columns: "(ts, token, value)",
-          values: `(${ts}, '${tokenSymbol}', ${price.toString()})`,
+          values: `(${ts}, ${token.id}, ${price.toString()})`,
         });
       }
     } catch (err) {
@@ -625,9 +679,11 @@ export default class AggregateProcessor {
         const hashes = await this._tkztProvider.getTransactions<string[]>({
           contract: poolAddress,
           entrypoint: [
-            ...constants.SWAP_ENTRYPOINTS,
-            ...constants.ADD_LIQUIDITY_ENTRYPOINTS,
-            ...constants.REMOVE_LIQUIDITY_ENTRYPOINTS,
+            ...constants.V2_SWAP_ENTRYPOINTS,
+            ...constants.V2_ADD_LIQUIDITY_ENTRYPOINTS,
+            ...constants.V2_REMOVE_LIQUIDITY_ENTRYPOINTS,
+            ...constants.V3_SWAP_ENTRYPOINTS,
+            ...constants.V3_LIQUIDITY_ENTRYPOINTS,
           ],
           level,
           limit: this._config.tzktLimit,

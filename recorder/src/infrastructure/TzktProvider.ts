@@ -1,7 +1,8 @@
 import qs from "qs";
 import axios from "axios";
+import BigNumber from "bignumber.js";
 
-import { Config, GetTransactionParameters, Transaction } from "../types";
+import { Config, GetTransactionParameters, Token, Transaction } from "../types";
 
 export default class TzktProvider {
   private _tzktURL: string;
@@ -37,6 +38,22 @@ export default class TzktProvider {
       const res = await axios.get(`${this._tzktURL}/operations/${hash}`);
       return res.data;
     } catch (err) {
+      throw err;
+    }
+  }
+
+  async getTokenBalance(token: Token, account: string): Promise<BigNumber> {
+    try {
+      const res = await axios.get(`${this._tzktURL}/tokens/balances`, {
+        params: {
+          ["token.tokenId"]: token.tokenId ?? "0",
+          ["token.contract"]: token.address,
+          account,
+        },
+      });
+
+      return new BigNumber(res.data[0].balance).dividedBy(10 ** token.decimals);
+    } catch (err: any) {
       throw err;
     }
   }

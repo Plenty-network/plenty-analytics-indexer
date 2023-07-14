@@ -1,24 +1,57 @@
-import axios from "axios";
-
-import { Pools, Config, Dependecies } from "./types";
-
 import Cache from "./infrastructure/Cache";
+import { entriesToTokens } from "./utils/entryToToken";
 import TzktProvider from "./infrastructure/TzktProvider";
 import DatabaseClient from "./infrastructure/DatabaseClient";
+import { Pool, Config, Dependecies, PoolType } from "./types";
 
-// Fetch pools and tokens data from Plenty's system wide config and caches it
-const getPools = (cache: Cache, config: Config) => async (): Promise<Pools> => {
+// Fetch pools and tokens data from database
+const getPools = (cache: Cache, config: Config, dbClient: DatabaseClient) => async (): Promise<Pool[]> => {
   try {
-    let data: Pools | undefined = cache.get("data");
-    if (!data) {
-      const pools = (await axios.get(config.configURL + "/pools")).data;
-      data = {
-        v2: Object.values(pools),
-        v3: [],
-      };
-      cache.insert("data", data, config.ttl.data);
+    let pools: Pool[] = cache.get("data") ?? [];
+    if (pools.length === 0) {
+      const poolsV2 = (
+        await dbClient.getAll({
+          table: "pool_v2",
+          select: "*",
+        })
+      ).rows;
+      const poolsV3 = (
+        await dbClient.getAll({
+          table: "pool_v3",
+          select: "*",
+        })
+      ).rows;
+      const tokens = entriesToTokens(
+        await dbClient.getAll({
+          table: "token",
+          select: "*",
+        }),
+        "id"
+      );
+
+      for (const pool of poolsV2) {
+        pools.push({
+          address: pool.address,
+          token1: tokens[pool.token_1],
+          token2: tokens[pool.token_2],
+          fees: pool.fees,
+          type: pool.type,
+        });
+      }
+
+      for (const pool of poolsV3) {
+        pools.push({
+          address: pool.address,
+          token1: tokens[pool.token_x],
+          token2: tokens[pool.token_y],
+          fees: pool.fee_bps,
+          type: PoolType.V3,
+        });
+      }
+
+      cache.insert("data", pools, config.ttl.data);
     }
-    return data;
+    return pools;
   } catch (err) {
     throw err;
   }
@@ -26,13 +59,14 @@ const getPools = (cache: Cache, config: Config) => async (): Promise<Pools> => {
 
 export const buildDependencies = async (config: Config): Promise<Dependecies> => {
   const cache = new Cache();
+  const dbClient = new DatabaseClient(config);
 
   try {
     return {
       config,
-      dbClient: new DatabaseClient(config),
+      dbClient,
       tzktProvider: new TzktProvider(config),
-      getPools: getPools(cache, config),
+      getPools: getPools(cache, config, dbClient),
     };
   } catch (err) {
     throw err;

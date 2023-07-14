@@ -68,7 +68,7 @@ export default class DatabaseClient {
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS token_aggregate_hour (
           ts numeric(10, 0) NOT NULL,
-          token varchar NOT NULL,
+          token numeric(10, 0) NOT NULL,
           open_price numeric(36, 12) NOT NULL,
           high_price numeric(36, 12) NOT NULL,
           low_price numeric(36, 12) NOT NULL,
@@ -86,7 +86,7 @@ export default class DatabaseClient {
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS token_aggregate_day (
           ts numeric(10, 0) NOT NULL,
-          token varchar NOT NULL,
+          token numeric(10, 0) NOT NULL,
           open_price numeric(36, 12) NOT NULL,
           high_price numeric(36, 12) NOT NULL,
           low_price numeric(36, 12) NOT NULL,
@@ -138,7 +138,7 @@ export default class DatabaseClient {
       await this._dbClient.query(
         `CREATE TABLE IF NOT EXISTS price_spot (
           ts numeric(10, 0) NOT NULL,
-          token varchar(48) NOT NULL,
+          token numeric(10, 0) NOT NULL,
           value numeric(36, 12) NOT NULL,
           PRIMARY KEY (ts, token)
         );`
@@ -153,6 +153,15 @@ export default class DatabaseClient {
       const res = await this._dbClient.query(
         `SELECT ${params.select} FROM ${params.table} WHERE ${params.where} LIMIT 1;`
       );
+      return res;
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  async getAll(params: DatabaseGetParams): Promise<QueryResult<any>> {
+    try {
+      const res = await this._dbClient.query(`SELECT ${params.select} FROM ${params.table};`);
       return res;
     } catch (err) {
       throw err;

@@ -1,5 +1,5 @@
 import BigNumber from "bignumber.js";
-import { PoolV2, Token, TokenStandard, Transaction } from "../types";
+import { Pool, Token, TokenStandard, Transaction } from "../types";
 
 export const getTokenAmountFromOperation = (token: Token, operation: Transaction[], index: number): BigNumber => {
   switch (token.standard) {
@@ -41,7 +41,7 @@ export const getTokenAmountFromOperation = (token: Token, operation: Transaction
   }
 };
 
-export const getTokenReserveFromStorage = (txn: Transaction, pool: PoolV2): [BigNumber, BigNumber] => {
+export const getTokenReserveFromStorage = (txn: Transaction, pool: Pool): [BigNumber, BigNumber] => {
   // Get the token reserves from storage (volatile || stable || tez-ctez)
   const token1Pool = txn.storage.token1Pool || txn.storage.token1_pool || txn.storage.tezPool;
   const token2Pool = txn.storage.token2Pool || txn.storage.token2_pool || txn.storage.ctezPool;
