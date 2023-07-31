@@ -10,7 +10,6 @@ import {
   PlentyTransaction,
 } from "../types";
 import {
-  getPriceAt,
   getLastLevel,
   calculatePrice,
   recordLastLevel,
@@ -211,10 +210,10 @@ export default class AggregateProcessor {
 
             await this._recordToken(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
             await this._recordToken(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
-            await this._recordPlenty(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
-            await this._recordPlenty(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
             await this._recordPool(plentyTxn, Period.HOUR);
             await this._recordPool(plentyTxn, Period.DAY);
+            await this._recordPlenty(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.HOUR);
+            await this._recordPlenty(plentyTxn, { token1: oldReserveToken1, token2: oldReserveToken2 }, Period.DAY);
           }
         }
       }
@@ -508,14 +507,14 @@ export default class AggregateProcessor {
 
       // If no existing entry is present for the timestamp
       if (currentEntry.rowCount === 0) {
-        // Get the TVL (i.e value locked across tokens) for the last hour, grouped by tokens
+        // Get the TVL (i.e value locked across tokens) for the last (or current) hour, grouped by tokens
         const tvl = (
           await this._dbClient.raw(`
           SELECT sum(locked_value) as tvl 
           FROM (
             SELECT token, MAX(ts) mts FROM
               token_aggregate_hour
-            WHERE ts<${ts} GROUP BY token
+            WHERE ts<=${ts} GROUP BY token
           ) r
           JOIN token_aggregate_hour t
             ON r.token=t.token AND r.mts=t.ts;
