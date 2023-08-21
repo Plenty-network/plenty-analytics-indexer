@@ -123,23 +123,6 @@ export default class AggregateProcessor {
               txnFeesValue: { token1: constants.ZERO_VAL, token2: constants.ZERO_VAL },
             };
 
-            // Token prices
-            const [token1Price, token2Price] = await calculatePrice(this._dbClient, plentyTxn);
-
-            // Record spot price of the tokens
-            await this._recordSpotPrice(plentyTxn.timestamp, plentyTxn.pool.token1, token1Price);
-            await this._recordSpotPrice(plentyTxn.timestamp, plentyTxn.pool.token2, token2Price);
-
-            plentyTxn.txnPrices = { token1: token1Price, token2: token2Price };
-            plentyTxn.txnValue = {
-              token1: token1Amount.multipliedBy(token1Price),
-              token2: token2Amount.multipliedBy(token2Price),
-            };
-            plentyTxn.txnFeesValue = {
-              token1: calculateFees(plentyTxn.txnValue.token1),
-              token2: calculateFees(plentyTxn.txnValue.token2),
-            };
-
             // Set txn type based on entrypoint called
             // V2 liquidity
             if (constants.V2_ADD_LIQUIDITY_ENTRYPOINTS.includes(txn.parameter?.entrypoint)) {
@@ -190,6 +173,23 @@ export default class AggregateProcessor {
                 plentyTxn.txnType = TransactionType.SWAP_TOKEN_2;
               }
             }
+
+            // Token prices
+            const [token1Price, token2Price] = await calculatePrice(this._dbClient, plentyTxn);
+
+            // Record spot price of the tokens
+            await this._recordSpotPrice(plentyTxn.timestamp, plentyTxn.pool.token1, token1Price);
+            await this._recordSpotPrice(plentyTxn.timestamp, plentyTxn.pool.token2, token2Price);
+
+            plentyTxn.txnPrices = { token1: token1Price, token2: token2Price };
+            plentyTxn.txnValue = {
+              token1: token1Amount.multipliedBy(token1Price),
+              token2: token2Amount.multipliedBy(token2Price),
+            };
+            plentyTxn.txnFeesValue = {
+              token1: calculateFees(plentyTxn.txnValue.token1),
+              token2: calculateFees(plentyTxn.txnValue.token2),
+            };
 
             await this._recordTransaction(plentyTxn);
 
