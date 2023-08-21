@@ -86,6 +86,9 @@ export default class AggregateProcessor {
             const token1Amount = getTokenAmountFromOperation(pool.token1, operation, index);
             const token2Amount = getTokenAmountFromOperation(pool.token2, operation, index);
 
+            // A null swap is possible in v3
+            if (token1Amount.isZero() && token2Amount.isZero()) continue;
+
             // Pair token reserves during the transaction
             let token1Reserve, token2Reserve;
             if (pool.type === PoolType.V3) {
