@@ -1,5 +1,6 @@
 import {
   Pool,
+  Pools,
   Token,
   Config,
   Period,
@@ -8,6 +9,7 @@ import {
   Transaction,
   TransactionType,
   PlentyTransaction,
+  OperationCollection,
 } from "../types";
 import {
   getLastLevel,
@@ -28,7 +30,7 @@ export default class AggregateProcessor {
   private _config: Config;
   private _dbClient: DatabaseClient;
   private _tkztProvider: TzktProvider;
-  private _getPools: () => Promise<Pool[]>;
+  private _getPools: () => Promise<Pools>;
 
   constructor({ config, dbClient, tzktProvider, getPools }: Dependecies) {
     this._config = config;
@@ -47,13 +49,14 @@ export default class AggregateProcessor {
     try {
       for (level = getLastLevel() + 1; level <= lastLevel; level++) {
         // Process transactions
-        for (const pool of pools) {
-          currentPool = pool.address;
-          const operationHashes = await this._getOperationHashes(pool.address, level);
-          for (const hash of operationHashes) {
-            const operation = await this._tkztProvider.getOperation(hash);
-            currentOperation = hash;
-            await this._processOperation(operation, pool);
+        const poolsArr = Object.keys(pools);
+        for (let i = 0; i <= poolsArr.length; i += 100) {
+          const operationCollection = await this._getOperationHashes(poolsArr.slice(i, i + 100), level);
+          for (const collection of operationCollection) {
+            const operation = await this._tkztProvider.getOperation(collection.hash);
+            currentOperation = collection.hash;
+            currentPool = collection.target.address;
+            await this._processOperation(operation, pools[currentPool]);
           }
         }
         recordLastLevel(level);
@@ -511,8 +514,9 @@ export default class AggregateProcessor {
       // If no existing entry is present for the timestamp
       if (currentEntry.rowCount === 0) {
         // Get the TVL (i.e value locked across tokens) for the last (or current) hour, grouped by tokens
-        const tvl = (
-          await this._dbClient.raw(`
+        const tvl =
+          (
+            await this._dbClient.raw(`
           SELECT sum(locked_value) as tvl 
           FROM (
             SELECT token, MAX(ts) mts FROM
@@ -522,7 +526,7 @@ export default class AggregateProcessor {
           JOIN token_aggregate_hour t
             ON r.token=t.token AND r.mts=t.ts;
         `)
-        ).rows[0].tvl;
+          ).rows[0].tvl ?? "0";
 
         await this._dbClient.insert({
           table,
@@ -548,7 +552,7 @@ export default class AggregateProcessor {
                   ? txn.txnFeesValue.token2
                   : 0
               },
-              ${tvl.toString()}
+              ${tvl}
             )`,
         });
       } else {
@@ -632,13 +636,13 @@ export default class AggregateProcessor {
   /**
    * @description fetches the hashes of swap and liquidity operations on the pool
    */
-  private async _getOperationHashes(poolAddress: string, level: number): Promise<string[]> {
+  private async _getOperationHashes(poolAddresses: string[], level: number): Promise<OperationCollection> {
     try {
       let offset = 0;
-      let operationHashes: string[] = [];
+      let operationHashes: OperationCollection = [];
       while (true) {
-        const hashes = await this._tkztProvider.getTransactions<string[]>({
-          contract: poolAddress,
+        const coll = await this._tkztProvider.getTransactions<OperationCollection>({
+          contract: poolAddresses,
           entrypoint: [
             ...constants.V2_SWAP_ENTRYPOINTS,
             ...constants.V2_ADD_LIQUIDITY_ENTRYPOINTS,
@@ -649,12 +653,12 @@ export default class AggregateProcessor {
           level,
           limit: this._config.tzktLimit,
           offset,
-          select: "hash",
+          select: "hash,target",
         });
-        if (hashes.length === 0) {
+        if (coll.length === 0) {
           break;
         } else {
-          operationHashes = operationHashes.concat(hashes);
+          operationHashes = operationHashes.concat(coll);
           offset += this._config.tzktOffset;
         }
       }

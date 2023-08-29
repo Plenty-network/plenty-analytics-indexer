@@ -30,7 +30,7 @@ export interface Dependecies {
   config: Config;
   dbClient: DatabaseClient;
   tzktProvider: TzktProvider;
-  getPools: () => Promise<Pool[]>;
+  getPools: () => Promise<Pools>;
 }
 
 export interface BlockData {
@@ -70,13 +70,20 @@ export interface DatabaseUpdateParams {
 //================
 
 export interface GetTransactionParameters {
-  contract: string;
+  contract: string[];
   entrypoint: string[];
   level: number;
   limit: number;
   offset: number;
   select: string;
 }
+
+export type OperationItem = {
+  hash: string;
+  target: { address: string };
+};
+
+export type OperationCollection = Array<OperationItem>;
 
 export interface Transaction {
   id: number;
@@ -145,6 +152,10 @@ export interface Pool {
   token2: Token;
   fees: number;
   type: PoolType;
+}
+
+export interface Pools {
+  [key: string]: Pool;
 }
 
 //=================

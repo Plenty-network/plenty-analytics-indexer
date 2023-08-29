@@ -19,4 +19,4 @@ export const V3_SWAP_X_TO_Y = "x_to_y";
 export const V3_SWAP_Y_TO_X = "y_to_x";
 export const TEZ_SWAP_ENTRYPOINT = "tez_to_ctez";
 export const CTEZ_SWAP_ENTRYPOINT = "ctez_to_tez";
-export const PRICING_TREE = [["USDt", "USDC.e"], ["ctez"], ["uUSD", "kUSD"], ["YOU"]];
+export const PRICING_TREE = [["USDt", "USDC.e"], ["ctez"], ["uUSD", "kUSD"], ["YOU"], ["uXTZ"], ["uXAU"]];

@@ -2,13 +2,13 @@ import Cache from "./infrastructure/Cache";
 import { entriesToTokens } from "./utils/entryToToken";
 import TzktProvider from "./infrastructure/TzktProvider";
 import DatabaseClient from "./infrastructure/DatabaseClient";
-import { Pool, Config, Dependecies, PoolType } from "./types";
+import { Config, Dependecies, PoolType, Pools } from "./types";
 
 // Fetch pools and tokens data from database
-const getPools = (cache: Cache, config: Config, dbClient: DatabaseClient) => async (): Promise<Pool[]> => {
+const getPools = (cache: Cache, config: Config, dbClient: DatabaseClient) => async (): Promise<Pools> => {
   try {
-    let pools: Pool[] = cache.get("data") ?? [];
-    if (pools.length === 0) {
+    let pools: Pools = cache.get("data") ?? {};
+    if (Object.keys(pools).length === 0) {
       const poolsV2 = (
         await dbClient.getAll({
           table: "pool_v2",
@@ -30,23 +30,23 @@ const getPools = (cache: Cache, config: Config, dbClient: DatabaseClient) => asy
       );
 
       for (const pool of poolsV2) {
-        pools.push({
+        pools[pool.address] = {
           address: pool.address,
           token1: tokens[pool.token_1],
           token2: tokens[pool.token_2],
           fees: pool.fees,
           type: pool.type,
-        });
+        };
       }
 
       for (const pool of poolsV3) {
-        pools.push({
+        pools[pool.address] = {
           address: pool.address,
           token1: tokens[pool.token_x],
           token2: tokens[pool.token_y],
           fees: pool.fee_bps,
           type: PoolType.V3,
-        });
+        };
       }
 
       cache.insert("data", pools, config.ttl.data);
