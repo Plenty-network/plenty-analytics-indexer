@@ -11,6 +11,7 @@ export const getTokenAmountFromOperation = (token: Token, operation: Transaction
           return new BigNumber(operation[index].amount).dividedBy(10 ** token.decimals);
         }
         index++;
+        if (index === operation.length) return new BigNumber(0);
       }
     }
     case TokenStandard.FA2: {
@@ -26,6 +27,7 @@ export const getTokenAmountFromOperation = (token: Token, operation: Transaction
           return new BigNumber(operation[index].parameter.value[0].txs[0].amount).dividedBy(10 ** token.decimals);
         }
         index++;
+        if (index === operation.length) return new BigNumber(0);
       }
     }
     case TokenStandard.FA12: {
@@ -36,6 +38,7 @@ export const getTokenAmountFromOperation = (token: Token, operation: Transaction
           return new BigNumber(operation[index].parameter.value.value).dividedBy(10 ** token.decimals);
         }
         index++;
+        if (index === operation.length) return new BigNumber(0);
       }
     }
   }
