@@ -1,6 +1,6 @@
 export interface Config {
   heartbeatURL: string;
-  tezosRpcURL: string;
+  tzktURL: string;
   broadcastAddress: string;
   ports: string;
 }
